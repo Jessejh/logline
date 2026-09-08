@@ -1,5 +1,5 @@
 import type { Answer, FlightResult, LinePoint } from '../game/types';
-import { all, put, remove } from './db';
+import { all, ENTRIES, put, remove } from './db';
 
 export const ENTRY_VERSION = 1;
 
@@ -53,17 +53,17 @@ export function makeEntry(result: FlightResult, ts = Date.now()): Entry {
 }
 
 export async function saveEntry(entry: Entry): Promise<void> {
-  await put(entry);
+  await put(ENTRIES, entry);
 }
 
 /** Newest first. */
 export async function listEntries(): Promise<Entry[]> {
-  const rows = await all<Entry>();
+  const rows = await all<Entry>(ENTRIES);
   return rows.sort((a, b) => b.ts - a.ts);
 }
 
 export async function removeEntry(id: string): Promise<void> {
-  await remove(id);
+  await remove(ENTRIES, id);
 }
 
 export function isEntry(value: unknown): value is Entry {

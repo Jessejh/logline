@@ -1,4 +1,4 @@
-import { PALETTE } from './palette';
+import { PALETTE, withAlpha } from './palette';
 import { QUESTIONS } from './questions';
 import type { Answer, FlightResult, LinePoint, Question } from './types';
 import { visibleHeight, visibleWidth } from '../viewport';
@@ -588,8 +588,8 @@ export class Flight {
     ctx.fillRect(0, 0, W, H);
 
     const glow = ctx.createRadialGradient(CX * 0.7, CY * 0.6, 0, CX, CY, Math.max(W, H) * 0.7);
-    glow.addColorStop(0, 'rgba(123,107,154,0.06)');
-    glow.addColorStop(0.5, 'rgba(45,107,122,0.04)');
+    glow.addColorStop(0, PALETTE.glowA);
+    glow.addColorStop(0.5, PALETTE.glowB);
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
@@ -817,19 +817,19 @@ export class Flight {
       ctx.stroke();
     }
 
-    ctx.shadowColor = 'rgba(108,192,208,0.9)';
+    ctx.shadowColor = PALETTE.craftGlow;
     ctx.shadowBlur = 26;
 
     const wing = (root: [number, number], rootB: [number, number], tip: [number, number], lift: number) => {
       const shade = 0.72 + 0.28 * Math.max(0, Math.sin(lift) + 0.4);
-      ctx.fillStyle = `rgba(184,216,224,${Math.min(1, shade)})`;
+      ctx.fillStyle = withAlpha(PALETTE.craft, Math.min(1, shade));
       ctx.beginPath();
       ctx.moveTo(root[0], root[1]);
       ctx.lineTo(tip[0], tip[1]);
       ctx.lineTo(rootB[0], rootB[1]);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = 'rgba(168,213,216,0.45)';
+      ctx.strokeStyle = withAlpha(PALETTE.craft, 0.45);
       ctx.lineWidth = 0.7;
       ctx.beginPath();
       ctx.moveTo(root[0], root[1]);
@@ -854,7 +854,7 @@ export class Flight {
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(200,228,234,0.85)';
+    ctx.fillStyle = withAlpha(PALETTE.craft, 0.85);
     ctx.beginPath();
     ctx.moveTo(tail[0], tail[1]);
     ctx.lineTo(finTop[0], finTop[1]);
@@ -924,15 +924,15 @@ export class Flight {
     if (aimed && !g.done) {
       const ax = x0 + this.aim.ix * cw;
       const ay = y0 + this.aim.iy * ch;
-      ctx.fillStyle = `rgba(168,213,216,${0.08 + 0.1 * near + 0.04 * pulse})`;
+      ctx.fillStyle = withAlpha(PALETTE.ice, 0.08 + 0.1 * near + 0.04 * pulse);
       ctx.fillRect(ax, ay, cw, ch);
-      ctx.strokeStyle = `rgba(109,192,208,${0.45 + 0.4 * near})`;
+      ctx.strokeStyle = withAlpha(PALETTE.trailHot, 0.45 + 0.4 * near);
       ctx.lineWidth = Math.max(0.8, 1.6 * s);
       ctx.strokeRect(ax + 1, ay + 1, cw - 2, ch - 2);
     }
 
     ctx.lineWidth = Math.max(0.5, s);
-    ctx.strokeStyle = `rgba(120,175,190,${0.18 + 0.25 * near})`;
+    ctx.strokeStyle = withAlpha(PALETTE.ice, (0.18 + 0.25 * near) * 0.8);
     ctx.beginPath();
     for (let i = 1; i < nx; i++) {
       ctx.moveTo(x0 + i * cw, y0);
@@ -945,7 +945,7 @@ export class Flight {
     ctx.stroke();
 
     ctx.lineWidth = Math.max(0.8, 2 * s);
-    ctx.strokeStyle = `rgba(168,213,216,${0.28 + 0.4 * near})`;
+    ctx.strokeStyle = withAlpha(PALETTE.ice, 0.28 + 0.4 * near);
     ctx.shadowColor = 'rgba(45,107,122,0.8)';
     ctx.shadowBlur = 14 * s;
     ctx.strokeRect(x0, y0, w, h);

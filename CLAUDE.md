@@ -6,8 +6,12 @@ and why. Don't re-propose rejected ideas.
 ## Non-negotiables
 
 - Mobile-only. Single-thumb portrait. No desktop layout.
-- Grading phase is never scored. Points come only from track-phase
-  flying precision — never from which answer a player picks.
+- Grading phase is never scored. Nothing a player earns may depend
+  on which answer they pick — not credits, not items, not anything
+  added later. Credits are paid per gate passed and per day streak,
+  and the award function is deliberately never given the answers.
+- Upgrades are appearance only. Nothing is scored, so nothing may
+  buy an advantage.
 - Grid answer options use even counts (4, not 3 or 5). No neutral
   middle.
 - Edge answers: visually distinctive, never worth more than middle.
@@ -44,13 +48,24 @@ logged line after each flight (`src/lib/game/artwork.ts`). Also
 built: the journal (past flights, on-device), export/import, offline,
 and home-screen install.
 
+The collection pipeline is closed. Gates pay credits, the streak
+raises the per-gate rate, the first flight of a local day is the one
+that pays, and credits buy appearance-only upgrades (hull, frames,
+sky) in the workshop. The collection screen shows the streak, the
+balance, a per-question trend over the last fortnight, and a tally
+of every material gathered. Rules live in `src/lib/progress/`,
+persistence in `src/lib/storage/profile.ts`.
+
 `prototypes/grading-phase.html` stays as the feel reference. It is
 frozen — fix the port, not the prototype, and don't let the two drift
 without saying so. Every place the port deliberately differs is
 listed in `docs/DESIGN.md` under "Divergences from the prototype";
 add to that list when you add another.
 
-Track phase and village phase are still unbuilt and still undesigned.
+Track phase is still unbuilt and still undesigned. The village is
+parked — `docs/DESIGN.md` keeps it under "Parked: the village"
+because its symmetric-yield reasoning still applies. Don't build it
+back without asking.
 
 ## Stack
 
