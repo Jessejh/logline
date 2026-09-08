@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#050810">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Logline</title>
+<style>
+  :root{
+    --void:#050810;
+    --deep:#0c1228;
+    --teal:#2d6b7a;
+    --ice:#a8d5d8;
+    --lamp:#e8b87a;
+    --violet:#7b6b9a;
+    --trail:#4a8fa0;
+    --proj:#e8b87a;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--void)}
+  body{font-family:var(--sans);color:var(--ice);touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
+  canvas{display:block;position:fixed;inset:0}
+
+  #question{
+    position:fixed;top:calc(env(safe-area-inset-top) + 28px);left:0;right:0;
+    padding:0 28px;text-align:center;
+    font-family:var(--serif);font-size:22px;line-height:1.45;
+    color:#cfe6e8;opacity:0;transition:opacity .7s ease;
+    pointer-events:none;text-shadow:0 2px 22px rgba(0,0,0,.85);
+  }
+  #question.on{opacity:1}
+
+  .veil{
+    position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:34px 28px calc(env(safe-area-inset-bottom) + 28px);
+    background:radial-gradient(110% 70% at 50% 35%,rgba(12,18,40,.6),transparent 70%),rgba(5,8,16,.96);
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+  }
+  .veil.hide{display:none}
+
+  h1{font-family:var(--serif);font-weight:400;font-size:36px;line-height:1.15;color:#e6f2f2;margin-bottom:6px}
+  .sub{font-family:var(--serif);font-size:15px;color:#5a7a86;letter-spacing:.03em;margin-bottom:22px}
+  .lede{font-family:var(--serif);font-size:17px;line-height:1.65;color:#7fa3ad;max-width:30em;margin-bottom:12px}
+  .howto{font-size:14px;line-height:1.7;color:#5a7a86;margin-top:18px}
+  .howto b{color:#8fb8c2;font-weight:600}
+
+  button{
+    margin-top:30px;align-self:flex-start;background:none;
+    border:1px solid rgba(232,184,122,.45);color:var(--lamp);
+    font-family:var(--sans);font-size:15px;letter-spacing:.02em;
+    padding:14px 28px;border-radius:2px;cursor:pointer;
+  }
+  button:active{background:rgba(232,184,122,.1)}
+  button:focus-visible{outline:2px solid var(--lamp);outline-offset:3px}
+
+  .veil h2{font-family:var(--serif);font-weight:400;font-size:24px;color:#e6f2f2;margin-bottom:18px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 0;border-bottom:1px solid rgba(45,107,122,.22)}
+  .row .q{font-family:var(--serif);font-size:14.5px;color:#6d95a0;flex:1}
+  .row .a{font-size:13.5px;color:#d0e8e8;text-align:right;white-space:nowrap}
+  .row .a.edge{color:var(--lamp)}
+
+  .lines{margin-top:22px;padding-top:16px;border-top:1px solid rgba(45,107,122,.18)}
+  .lines p{font-size:13px;color:#5a7a86;margin-bottom:10px}
+  .line-vis{height:48px;position:relative;margin-bottom:8px;border-radius:2px;overflow:hidden;background:rgba(12,18,40,.5)}
+  .line-vis canvas{width:100%;height:100%}
+
+  .haul{margin-top:20px}
+  .haul p{font-size:13px;color:#5a7a86;margin-bottom:10px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:12px;padding:5px 10px;border-radius:2px;border:1px solid rgba(45,107,122,.45);color:var(--ice)}
+  .chip.raw{border-color:rgba(123,107,154,.55);color:#b0a0c8}
+  .chip.ref{border-color:rgba(232,184,122,.4);color:#dfc090}
+
+  .note{margin-top:24px;font-family:var(--serif);font-size:14.5px;line-height:1.6;color:#6d95a0;border-left:1px solid rgba(45,107,122,.45);padding-left:14px}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="question"></div>
+
+<div class="veil" id="intro">
+  <h1>Logline</h1>
+  <p class="sub">a line drawn through the day</p>
+  <p class="lede">Eight questions. You answer by flying through them. The line behind you is today's record. The line ahead is where you're pointing.</p>
+  <p class="howto">
+    Hold your thumb anywhere and drag. The craft follows.<br><br>
+    Each frame ahead is one question. <b>Pass through the opening you mean.</b> Every cell gives you material — edges aren't worth more, they're just different.
+  </p>
+  <button id="start">Begin</button>
+</div>
+
+<div class="veil hide" id="summary"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── questions ── */
+const QS=[
+  {q:"Where are you in the day?",type:"1d",
+   cols:["Dawn","Midday","Dusk","Night"],
+   items:["Firstlight","Noonstone","Duskglass","Nightpeat"],kind:"meta"},
+  {q:"How did you sleep?",type:"1d",
+   cols:["Barely","Restless","Enough","Deep"],
+   items:["Emberash","Coarse Wool","Linen","Moonsilk"]},
+  {q:"What is your energy like?",type:"1d",
+   cols:["Empty","Low","Steady","Charged"],
+   items:["Cold Iron","Rootite","Beeswax","Sunglass"]},
+  {q:"Where does today sit?",type:"2d",
+   cols:["Calm","","","Restless"],rows:["Light","","","Heavy"],
+   xAxis:["Calm","Restless"],yAxis:["Light","Heavy"],
+   items:["Still Clay","River Clay","Quick Clay","Storm Clay"]},
+  {q:"How near were other people?",type:"1d",
+   cols:["Alone","Distant","Warm","Held"],
+   items:["Bare Thread","Twine","Braid","Silk Cord"]},
+  {q:"And your attention?",type:"2d",
+   cols:["Scattered","","","Sharp"],rows:["Easy","","","Forced"],
+   xAxis:["Scattered","Sharp"],yAxis:["Easy","Forced"],
+   items:["Sand","Flint","Ground Glass","Lens"]},
+  {q:"What is the body saying?",type:"1d",
+   cols:["Sore","Tense","Easy","Alive"],
+   items:["Bitterbark","Knotwood","Balmwood","Greenwood"]},
+  {q:"Did you find any stillness?",type:"1d",
+   cols:["None","A moment","Some","Plenty"],
+   items:["Raw Peat","Dry Peat","Cedar","Heartwood"]}
+];
+
+/* ── canvas ── */
+const cvs=document.getElementById("c"),ctx=cvs.getContext("2d");
+const qEl=document.getElementById("question");
+const introEl=document.getElementById("intro"),sumEl=document.getElementById("summary");
+let W=0,H=0,DPR=1,GW=0,GH=0,CX=0,CY=0;
+
+function layout(){
+  DPR=Math.min(devicePixelRatio||1,2.5);
+  W=innerWidth;H=innerHeight;
+  cvs.width=Math.round(W*DPR);cvs.height=Math.round(H*DPR);
+  cvs.style.width=W+"px";cvs.style.height=H+"px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  GW=Math.min(W*.86,420);GH=Math.min(GW*.86,H*.40);
+  CX=W/2;CY=H*.44;
+}
+addEventListener("resize",layout);layout();
+
+/* ── state ── */
+const FOCAL=7,SPEED=3.45,SPACING=13.5,LIFT=96;
+let mode="intro";
+let plane={x:0,y:0,vx:0,vy:0,tx:0,ty:0,roll:0,pitch:0};
+let loggedLine=[];   // permanent trail — the record
+let gates=[],stars=[],pops=[],sparks=[],answers=[];
+let last=0,zDist=0;
+let reduced=matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+function clampPlane(){
+  const mx=GW/2-10,my=GH/2-10;
+  plane.tx=Math.max(CX-mx,Math.min(CX+mx,plane.tx));
+  plane.ty=Math.max(CY-my,Math.min(CY+my,plane.ty));
+}
+
+function reset(){
+  plane.x=plane.tx=CX;plane.y=plane.ty=CY;
+  plane.vx=plane.vy=0;plane.roll=0;plane.pitch=0;
+  loggedLine=[];answers=[];pops=[];sparks=[];zDist=0;
+  gates=QS.map((q,i)=>({q,dist:17+i*SPACING,done:false,pick:null,flash:0}));
+  stars=[];
+  const N=reduced?80:220;
+  for(let i=0;i<N;i++) stars.push({
+    wx:(Math.random()-.5)*W*3,
+    wy:(Math.random()-.5)*H*3,
+    d:Math.random()*40+.5,
+    s:Math.random()*.6+.4
+  });
+}
+
+/* ── input ── */
+["pointerdown","pointermove"].forEach(ev=>{
+  cvs.addEventListener(ev,e=>{
+    if(mode!=="fly")return;
+    if(ev==="pointermove"&&e.buttons===0&&e.pointerType==="mouse")return;
+    e.preventDefault();
+    const t=e.touches?e.touches[0]:e;
+    plane.tx=t.clientX;plane.ty=t.clientY-LIFT;
+    clampPlane();
+  },{passive:false});
+});
+document.getElementById("start").addEventListener("click",()=>{
+  introEl.classList.add("hide");reset();mode="fly";
+  last=performance.now();requestAnimationFrame(loop);
+});
+
+/* ── helpers ── */
+const proj=d=>FOCAL/(FOCAL+Math.max(d,-3.5));
+function cellOf(g){
+  const nx=g.q.cols.length,ny=g.q.type==="2d"?g.q.rows.length:1;
+  const rx=(plane.x-(CX-GW/2))/GW,ry=(plane.y-(CY-GH/2))/GH;
+  return{ix:Math.max(0,Math.min(nx-1,Math.floor(rx*nx))),
+         iy:Math.max(0,Math.min(ny-1,Math.floor(ry*ny)))};
+}
+
+/* ── update ── */
+function update(dt){
+  // spring physics
+  plane.vx+=(plane.tx-plane.x)*30*dt;
+  plane.vy+=(plane.ty-plane.y)*30*dt;
+  const damp=Math.exp(-7.2*dt);
+  plane.vx*=damp;plane.vy*=damp;
+  plane.x+=plane.vx*dt;plane.y+=plane.vy*dt;
+
+  // 3d orientation from velocity
+  const tRoll=Math.max(-.65,Math.min(.65,plane.vx*.0028));
+  const tPitch=Math.max(-.45,Math.min(.45,-plane.vy*.0022));
+  plane.roll+=(tRoll-plane.roll)*6*dt;
+  plane.pitch+=(tPitch-plane.pitch)*6*dt;
+
+  zDist+=SPEED*dt;
+
+  // logged line — permanent record
+  loggedLine.push({x:plane.x,y:plane.y,z:zDist});
+
+  // stars
+  for(const p of stars){
+    p.d-=SPEED*dt*1.2;
+    if(p.d<.3){p.d=40;p.wx=(Math.random()-.5)*W*3;p.wy=(Math.random()-.5)*H*3;}
+  }
+
+  // gates
+  for(const g of gates){
+    const prev=g.dist;g.dist-=SPEED*dt;
+    if(g.flash>0)g.flash-=dt*1.7;
+    if(!g.done&&prev>0&&g.dist<=0)capture(g);
+  }
+  gates=gates.filter(g=>g.dist>-3.4);
+
+  for(const p of pops)p.t+=dt;
+  pops=pops.filter(p=>p.t<2.3);
+
+  for(const s of sparks){s.t+=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.vx*=Math.exp(-2.4*dt);s.vy*=Math.exp(-2.4*dt);}
+  sparks=sparks.filter(s=>s.t<1.1);
+
+  if(gates.length===0&&answers.length===QS.length&&mode==="fly"){
+    mode="done";qEl.classList.remove("on");
+    setTimeout(showSummary,700);
+  }
+}
+
+function capture(g){
+  const{ix,iy}=cellOf(g);
+  g.done=true;g.pick={ix,iy};g.flash=1;
+  const nx=g.q.cols.length,edge=ix===0||ix===nx-1;
+  const refined=ix>=nx/2;
+  let label;
+  if(g.q.type==="2d")label=g.q.xAxis[ix<nx/2?0:1]+" / "+g.q.yAxis[iy<g.q.rows.length/2?0:1];
+  else label=g.q.cols[ix];
+  answers.push({q:g.q.q,label,item:g.q.items[ix],edge,refined});
+  pops.push({text:"+ "+g.q.items[ix],x:plane.x,y:plane.y-30,t:0,edge});
+  for(let i=0;i<18;i++){
+    const a=Math.random()*Math.PI*2,sp=50+Math.random()*140;
+    sparks.push({x:plane.x,y:plane.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,t:0,edge});
+  }
+  if(navigator.vibrate)navigator.vibrate(14);
+}
+
+/* ── draw ── */
+function draw(){
+  // deep space background
+  ctx.fillStyle=var_void();ctx.fillRect(0,0,W,H);
+
+  // subtle nebula glow
+  const g1=ctx.createRadialGradient(CX*.7,CY*.6,0,CX,CY,Math.max(W,H)*.7);
+  g1.addColorStop(0,"rgba(123,107,154,0.06)");
+  g1.addColorStop(.5,"rgba(45,107,122,0.04)");
+  g1.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.fillStyle=g1;ctx.fillRect(0,0,W,H);
+
+  // stars
+  for(const p of stars){
+    const s=proj(p.d);if(s<=0)continue;
+    const x=CX+p.wx*s,y=CY+p.wy*s;
+    if(x<-10||x>W+10||y<-10||y>H+10)continue;
+    ctx.globalAlpha=Math.min(.7,s*1.1)*p.s;
+    const r=Math.max(.4,s*1.8)*p.s;
+    ctx.fillStyle="#c8dde0";
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // logged line (the record — always visible, fading into depth)
+  drawLoggedLine();
+
+  // projected line (where you're heading)
+  drawProjectedLine();
+
+  // gates
+  const sorted=gates.slice().sort((a,b)=>b.dist-a.dist);
+  for(const g of sorted)drawGate(g);
+
+  // sparks
+  for(const s of sparks){
+    ctx.globalAlpha=(1-s.t/1.1)*.8;
+    ctx.fillStyle=s.edge?"#e8b87a":"#a8d5d8";
+    ctx.fillRect(s.x-1.3,s.y-1.3,2.6,2.6);
+  }
+  ctx.globalAlpha=1;
+
+  // plane (3d diamond shape)
+  drawPlane3D();
+
+  // item pickups
+  for(const p of pops){
+    const k=p.t/2.3;
+    ctx.globalAlpha=k<.12?k/.12:Math.max(0,(1-k)*1.5);
+    ctx.fillStyle=p.edge?"#e8b87a":"#bfe0e2";
+    ctx.font="500 13px "+getComputedStyle(document.body).fontFamily;
+    ctx.textAlign="center";
+    ctx.fillText(p.text,p.x,p.y-k*54);
+  }
+  ctx.globalAlpha=1;
+
+  // question
+  const next=gates.filter(g=>!g.done).sort((a,b)=>a.dist-b.dist)[0];
+  if(next&&next.dist<15.5){if(qEl.textContent!==next.q.q)qEl.textContent=next.q.q;qEl.classList.add("on");}
+  else if(!next)qEl.classList.remove("on");
+}
+
+function var_void(){return"#050810";}
+
+function drawLoggedLine(){
+  if(loggedLine.length<3)return;
+  ctx.lineCap="round";ctx.lineJoin="round";
+
+  // draw from oldest to newest — each point projects back into depth
+  const len=loggedLine.length;
+  const maxShow=400;
+  const start=Math.max(0,len-maxShow);
+
+  for(let i=start+1;i<len;i++){
+    const p0=loggedLine[i-1],p1=loggedLine[i];
+    // how far behind is this point? difference in z
+    const zBehind0=zDist-p0.z, zBehind1=zDist-p1.z;
+    const s0=proj(zBehind0*.25),s1=proj(zBehind1*.25);
+    if(s0<=.01&&s1<=.01)continue;
+
+    // project toward vanishing point
+    const x0=CX+(p0.x-CX)*s0, y0=CY+(p0.y-CY)*s0;
+    const x1=CX+(p1.x-CX)*s1, y1=CY+(p1.y-CY)*s1;
+
+    const age=(i-start)/(len-start);
+    const depth=Math.min(1,s1*3);
+    ctx.globalAlpha=age*depth*.55;
+    ctx.strokeStyle="#4a8fa0";
+    ctx.lineWidth=Math.max(.5,s1*4)*age;
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+  }
+
+  // bright recent segment
+  if(len>2){
+    const tail=Math.max(0,len-12);
+    for(let i=tail+1;i<len;i++){
+      const k=(i-tail)/(len-tail);
+      ctx.globalAlpha=k*.85;
+      ctx.strokeStyle="#6dc0d0";
+      ctx.lineWidth=k*3.5;
+      ctx.beginPath();
+      ctx.moveTo(loggedLine[i-1].x,loggedLine[i-1].y);
+      ctx.lineTo(loggedLine[i].x,loggedLine[i].y);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawProjectedLine(){
+  // project forward based on current velocity
+  const steps=28;
+  const stepLen=5;
+  let px=plane.x,py=plane.y;
+  // damped projection of velocity
+  let pvx=plane.vx*.35,pvy=plane.vy*.35;
+
+  ctx.lineCap="round";
+  for(let i=0;i<steps;i++){
+    const nx=px+pvx*stepLen*.016;
+    const ny=py+pvy*stepLen*.016;
+    const k=1-i/steps;
+    // perspective shrink as it goes "forward"
+    const fwd=i*1.2;
+    const s=proj(fwd);
+    const sx=CX+(nx-CX)*s, sy=CY+(ny-CY)*s;
+    const spx=CX+(px-CX)*proj((i-1)*1.2||0), spy=CY+(py-CY)*proj((i-1)*1.2||0);
+
+    if(i>0){
+      ctx.globalAlpha=k*k*.28;
+      ctx.strokeStyle="#e8b87a";
+      ctx.lineWidth=Math.max(.4,k*2.2*s);
+      ctx.setLineDash([3*s,5*s]);
+      ctx.beginPath();ctx.moveTo(spx,spy);ctx.lineTo(sx,sy);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    px=nx;py=ny;
+    pvx*=.94;pvy*=.94;
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawPlane3D(){
+  ctx.save();
+  ctx.translate(plane.x,plane.y);
+
+  const roll=plane.roll;
+  const pitch=plane.pitch;
+
+  // 3D diamond/craft — ambiguous orientation
+  // wing span shrinks with roll, body stretches with pitch
+  const wingSpan=12*Math.cos(roll);
+  const bodyLen=13+pitch*8;
+  const bodyBack=8-pitch*4;
+
+  // glow
+  ctx.shadowColor="rgba(108,192,208,0.9)";
+  ctx.shadowBlur=26;
+
+  // body — elongated diamond
+  ctx.fillStyle="#d8eef2";
+  ctx.beginPath();
+  ctx.moveTo(0,-bodyLen);             // nose/top
+  ctx.lineTo(wingSpan,1);             // right wing
+  ctx.lineTo(0,bodyBack);             // tail/bottom
+  ctx.lineTo(-wingSpan,1);            // left wing
+  ctx.closePath();
+  ctx.fill();
+
+  // center line — gives depth read
+  ctx.strokeStyle="rgba(74,143,160,0.6)";
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(0,-bodyLen);
+  ctx.lineTo(0,bodyBack);
+  ctx.stroke();
+
+  // edge highlights — sells the 3D
+  ctx.strokeStyle="rgba(168,213,216,0.4)";
+  ctx.lineWidth=.7;
+  ctx.beginPath();
+  ctx.moveTo(0,-bodyLen);ctx.lineTo(wingSpan,1);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0,-bodyLen);ctx.lineTo(-wingSpan,1);
+  ctx.stroke();
+
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawGate(g){
+  const s=proj(g.dist);if(s<=.02)return;
+  let a=1;
+  if(g.dist>20)a=Math.max(0,(26-g.dist)/6);
+  if(g.dist<0)a=Math.max(0,1+g.dist/3.4);
+  if(a<=.01)return;
+
+  const w=GW*s,h=GH*s;
+  const x0=CX-w/2,y0=CY-h/2;
+  const nx=g.q.cols.length;
+  const ny=g.q.type==="2d"?g.q.rows.length:1;
+  const cw=w/nx,ch=h/ny;
+  const near=Math.min(1,Math.max(0,(14-g.dist)/9));
+
+  ctx.save();ctx.globalAlpha=a;
+
+  // cell tints
+  for(let i=0;i<nx;i++){for(let j=0;j<ny;j++){
+    const isEdge=(i===0||i===nx-1)||(ny>1&&(j===0||j===ny-1));
+    const picked=g.pick&&g.pick.ix===i&&g.pick.iy===j;
+    let f=isEdge?"rgba(232,184,122,0.05)":"rgba(45,107,122,0.04)";
+    if(picked&&g.flash>0)f="rgba(232,184,122,"+(0.30*g.flash)+")";
+    ctx.fillStyle=f;ctx.fillRect(x0+i*cw,y0+j*ch,cw,ch);
+  }}
+
+  // dividers
+  ctx.lineWidth=Math.max(.5,1*s);
+  ctx.strokeStyle="rgba(120,175,190,"+(0.18+0.25*near)+")";
+  ctx.beginPath();
+  for(let i=1;i<nx;i++){ctx.moveTo(x0+i*cw,y0);ctx.lineTo(x0+i*cw,y0+h);}
+  for(let j=1;j<ny;j++){ctx.moveTo(x0,y0+j*ch);ctx.lineTo(x0+w,y0+j*ch);}
+  ctx.stroke();
+
+  // frame
+  ctx.lineWidth=Math.max(.8,2*s);
+  ctx.strokeStyle="rgba(168,213,216,"+(0.28+0.40*near)+")";
+  ctx.shadowColor="rgba(45,107,122,0.8)";ctx.shadowBlur=14*s;
+  ctx.strokeRect(x0,y0,w,h);ctx.shadowBlur=0;
+
+  // labels
+  const la=near*a;
+  if(la>.06&&g.dist>-.5){
+    ctx.globalAlpha=la;ctx.fillStyle="#8fb8c2";ctx.textAlign="center";
+    if(g.q.type==="1d"){
+      const fs=Math.min(14,Math.max(8.5,cw*.15));
+      ctx.font="500 "+fs+"px "+getComputedStyle(document.body).fontFamily;
+      for(let i=0;i<nx;i++)ctx.fillText(g.q.cols[i],x0+i*cw+cw/2,y0+h-12*s-2);
+    }else{
+      const fs=Math.min(13,Math.max(8.5,w*.035));
+      ctx.font="500 "+fs+"px "+getComputedStyle(document.body).fontFamily;
+      ctx.fillText(g.q.yAxis[0],CX,y0-8);
+      ctx.fillText(g.q.yAxis[1],CX,y0+h+fs+5);
+      ctx.textAlign="right";ctx.fillText(g.q.xAxis[0],x0-7,CY+fs*.36);
+      ctx.textAlign="left";ctx.fillText(g.q.xAxis[1],x0+w+7,CY+fs*.36);
+    }
+  }
+  ctx.restore();
+}
+
+/* ── loop ── */
+function loop(now){
+  const dt=Math.min(.048,(now-last)/1000);last=now;
+  if(mode==="fly"||mode==="done"){update(dt);draw();requestAnimationFrame(loop);}
+}
+
+/* ── summary ── */
+function showSummary(){
+  const rows=answers.map(a=>
+    '<div class="row"><span class="q">'+a.q+'</span><span class="a'+(a.edge?' edge':'')+'">'+a.label+'</span></div>'
+  ).join("");
+  const chips=answers.map(a=>
+    '<span class="chip '+(a.refined?'ref':'raw')+'">'+a.item+'</span>'
+  ).join("");
+  const rawC=answers.filter(a=>!a.refined).length,refC=answers.length-rawC;
+
+  sumEl.innerHTML=
+    '<h2>Today\'s logline</h2>'+rows+
+    '<div class="lines"><p>The line you drew</p>'+
+    '<canvas id="lineVis" class="line-vis" height="48"></canvas></div>'+
+    '<div class="haul"><p>Gathered — '+rawC+' raw, '+refC+' refined</p><div class="chips">'+chips+'</div></div>'+
+    '<p class="note">This is where the track would wait — fly it for karma, or just keep the logline as a journal entry.</p>'+
+    '<button id="again">Fly again</button>';
+  sumEl.classList.remove("hide");
+
+  // draw miniature of logged line
+  requestAnimationFrame(()=>{
+    const lc=document.getElementById("lineVis");
+    if(!lc||loggedLine.length<3)return;
+    const lr=lc.getBoundingClientRect();
+    lc.width=Math.round(lr.width*DPR);lc.height=Math.round(lr.height*DPR);
+    const lx=lc.getContext("2d");lx.setTransform(DPR,0,0,DPR,0,0);
+    const lw=lr.width,lh=lr.height;
+
+    // normalize line into the mini canvas
+    let minX=Infinity,maxX=-Infinity;
+    for(const p of loggedLine){minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);}
+    const pad=14;const rangeX=Math.max(maxX-minX,1);
+
+    lx.lineCap="round";lx.lineJoin="round";
+    for(let i=1;i<loggedLine.length;i++){
+      const k=i/loggedLine.length;
+      lx.globalAlpha=k*.75;
+      lx.strokeStyle="#4a8fa0";
+      lx.lineWidth=k*2.5;
+      const x0=pad+(loggedLine[i-1].x-minX)/rangeX*(lw-pad*2);
+      const x1=pad+(loggedLine[i].x-minX)/rangeX*(lw-pad*2);
+      // z maps to time → x in mini, x maps to y in mini
+      const t0=(i-1)/loggedLine.length,t1=i/loggedLine.length;
+      lx.beginPath();
+      lx.moveTo(t0*(lw-pad*2)+pad, x0-pad+lh/2-(lh*.3));
+      lx.lineTo(t1*(lw-pad*2)+pad, x1-pad+lh/2-(lh*.3));
+      lx.stroke();
+    }
+  });
+
+  document.getElementById("again").addEventListener("click",()=>{
+    sumEl.classList.add("hide");reset();mode="fly";
+    last=performance.now();requestAnimationFrame(loop);
+  });
+}
+
+})();
+</script>
+</body>
+</html>
