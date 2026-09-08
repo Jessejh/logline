@@ -143,6 +143,104 @@ The balance lives in its own store rather than being recomputed
 from the journal, so deleting an entry does not confiscate what it
 earned. Pruning the journal has to stay safe.
 
+## The piece
+
+The record drawn flat, with the depth thrown away. Two layers, two
+meanings: **the ground is what you answered, the line is how you
+moved.**
+
+The 3D object threads the line through eight frames, which reads the
+*answers* well but needs turning before "did I wander today" is
+visible at all. Dropping z makes that the first thing you see — a
+short mark, or a tangle. The object is still there behind a toggle;
+it is the better reading of the answers, and the flat piece is the
+better reading of the flying.
+
+### The rule this has to keep
+
+**Neither end of any scale is the better one.** A flight taken in one
+straight breath and a flight that wandered everywhere have to be two
+kinds of good picture. The moment calm looks like failure, the app has
+begun scoring the grading phase, and someone who wants a nicer picture
+will fly for it — which bends the answers underneath. So movement does
+not add beauty here, it changes school: sparse and formal, or dense
+and layered, and both are finished.
+
+The first build got this wrong and is worth recording. Drawn at a
+fixed scale with the blooms placed where the craft was, a flight that
+held its line came out as a ten-pixel dash in a brown smudge — all
+eight blooms stacked on one spot and mixed to mud. That reads as
+*nothing happened*, not as restraint. Two fixes:
+
+- **The mark always fills its frame.** The record's own bounds are
+  fitted to the plate, capped at 7× so a motionless flight is not
+  blown up into a portrait of its own noise. A straight flight
+  arrives as one large confident stroke. How far the craft actually
+  ranged is still legible — it is carried by the *shape* of the mark
+  and by the ground, which is where it belongs, rather than by the
+  mark being too small to see.
+- **The blooms compose when there is nothing to follow.** Placement
+  slides from the flown position toward a formal ring as movement
+  falls away. Where there is a shape, follow it; where there is none,
+  compose. Restraint comes out ordered rather than empty.
+
+The same discipline covers the palette: four hues, one per column,
+picked at about equal lightness and chroma so no cell is a prettier
+cell to land in.
+
+### What drives what
+
+- **Hue** — the column taken at each gate. Eight blooms, multiplied
+  into the paper like pigment rather than laid on it as chalk, and
+  clipped to the plate so the result reads as something printed.
+- **Chroma and paper tone** — how much of the flight was spent
+  hovering. A day that kept stopping warms the paper and brings the
+  colour up; one taken in a single breath stays cool and graphic.
+  The floor is high: never stopping is a different temper, not a
+  washed-out version of the same one.
+- **Ink weight** — sideways speed. Slow is a wide soft deposit, fast
+  a drier trace. The range is deliberately narrow: speed is
+  normalised inside each flight, so a busy day reads as fast
+  everywhere, and letting that thin the whole mark would make the
+  liveliest days the faintest pictures.
+- **Colour along the line** — speed again. A quick pull drags the
+  mark apart into a coloured fringe, the way it separates pigment.
+  It rides the speed of the hand, never the answer taken.
+- **Density** — nothing computes it. Points are laid down at equal
+  intervals of *forward* travel, so holding the craft still sideways
+  piles many of them on one spot; drawing every segment at low alpha
+  lets the mark go dark exactly where the flight settled. Runs of
+  similar speed are stroked as one path, because segment-by-segment
+  strokes bead at every joint into a string of pearls.
+- **Pauses** — a ring where the thumb came off, sized by how long.
+
+### The clock
+
+`LinePoint` carries `t`, seconds since the flight began, and
+`ENTRY_VERSION` is 2. The record only grows while the craft moves, so
+a pause writes no point at all — which meant a long hesitation and no
+hesitation produced identical records. With a clock on each point a
+pause is a large gap in `t` across a tiny gap in `z`.
+
+Two things fall out of it worth knowing. `t` accumulates the frame
+delta the flight already clamps, so a stalled tab cannot fake a
+pause. And what is measured is time actually *stopped*, not
+thumb-off wall clock — the throttle coasts down over about a second,
+during which the craft is still moving and still logging. The honest
+reading, and shorter than the raw gap.
+
+`compressLine` keeps every point either side of a pause regardless of
+its stride. Thinning is blind to the clock, so a plain every-Nth pass
+would drop one side of a gap and take the pause with it — and pauses
+are the sparsest thing in the record.
+
+Flight statistics (`lib/game/stats.ts`) are computed on the
+full-resolution line inside `makeEntry` and stored on the entry,
+because compression flattens exactly the small corrections they
+measure. Entries written before version 2 have neither clock nor
+stats; `statsFor` recomputes what it can from the stored line and
+those pieces simply have no pause rings.
+
 ## Parked: the village
 
 Not cancelled, not being built. Kept here because the reasoning is
@@ -251,10 +349,10 @@ deliberate change, not drift:
 - **A winged craft.** A small 3D mesh replaces the flat diamond.
   Wings are stiff hinges driven by lift, roll rate and throttle, with
   an exhaust glow while there is power on.
-- **The artwork.** After the flight, before the summary, the logged
-  line is drawn in 3D through the eight gate frames, with the picked
-  cells and item names. Drag to turn, auto-turns when idle. Reachable
-  again from the summary and from any journal entry.
+- **The artwork.** After the flight, before the summary, the record
+  becomes a piece — flat by default, with the turnable 3D object one
+  tap away. See "The piece" below. Reachable again from the summary
+  and from any journal entry.
 - **Steering is relative, not absolute.** The prototype set the
   craft's target straight to the touch point, so putting a thumb down
   anywhere but on the craft threw it across the screen — press near

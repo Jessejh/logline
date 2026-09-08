@@ -450,7 +450,11 @@ export class Flight {
     // The record only grows while the craft moves; hovering leaves no mark.
     if (this.zDist - this.lastLoggedZ > 0.004) {
       const { nx, ny } = this.toNorm(p.x, p.y);
-      this.loggedLine.push({ nx, ny, z: this.zDist });
+      // The clock goes on every point, not just the distance. Hovering advances
+      // `time` while `zDist` stands still, so a pause leaves no point — but it
+      // widens the `t` gap between the points either side of it, which is what
+      // makes hesitation recoverable at all.
+      this.loggedLine.push({ nx, ny, z: this.zDist, t: this.time });
       this.lastLoggedZ = this.zDist;
     }
 
