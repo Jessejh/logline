@@ -3,10 +3,11 @@
   import LineMini from './LineMini.svelte';
   import InstallHint from './InstallHint.svelte';
 
-  let { entry, saveError, onAgain, onJournal }: {
+  let { entry, saveError, onAgain, onArtwork, onJournal }: {
     entry: Entry;
     saveError: string | null;
     onAgain: () => void;
+    onArtwork: () => void;
     onJournal: () => void;
   } = $props();
 
@@ -27,6 +28,7 @@
   <div class="lines">
     <p class="caption">The line you drew</p>
     <LineMini line={entry.line} />
+    <button class="small quiet turn" onclick={onArtwork}>Turn it in 3D</button>
   </div>
 
   <div class="haul">
@@ -58,6 +60,10 @@
 <style>
   .lines {
     margin-top: 22px;
+  }
+
+  .turn {
+    margin-top: 10px;
   }
 
   .haul {
