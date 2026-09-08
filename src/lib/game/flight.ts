@@ -29,9 +29,21 @@ const FIRST_GATE = 17;
 const STEER_GAIN = 1.35;
 /**
  * How big the craft is drawn. The mesh is modelled at the prototype's size;
- * this brings it closer to the camera so it is legible at arm's length.
+ * this brings it close enough to the camera to watch.
+ *
+ * There is more animation on this craft than a small one can show — each wing
+ * is a sprung hinge driven by lift, roll rate and throttle, the body banks and
+ * pitches off velocity, and it bobs and breathes while hovering. At the
+ * prototype's size all of that is a few pixels of flicker. Big enough to enjoy
+ * is the point of the number.
+ *
+ * The ceiling is the gate. Measured at 390px wide, 2.6 puts the craft about
+ * two cells across at a full-size gate — wide, but the answer is read off the
+ * lit cell and the reticle rather than the silhouette, and the body's centre
+ * stays plainly inside one opening. Going much past this starts hiding the
+ * labels themselves, which is where it would actually cost something.
  */
-const CRAFT_SCALE = 1.5;
+const CRAFT_SCALE = 2.6;
 
 /** How long a passed gate is kept around — the mirror watches it recede. */
 const KEEP_BEHIND = 48;
@@ -550,7 +562,7 @@ export class Flight {
         : g.q.cols[ix];
 
     this.answers.push({ q: g.q.q, label, item: g.q.items[ix], edge, refined, ix, iy });
-    this.pops.push({ text: `+ ${g.q.items[ix]}`, x: this.plane.x, y: this.plane.y - 44, t: 0, edge });
+    this.pops.push({ text: `+ ${g.q.items[ix]}`, x: this.plane.x, y: this.plane.y - 68, t: 0, edge });
 
     for (let i = 0; i < 18; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -800,25 +812,30 @@ export class Flight {
     ctx.translate(p.x, p.y + bob);
     ctx.scale(CRAFT_SCALE, CRAFT_SCALE);
 
-    // Exhaust while there is power on.
+    // Exhaust while there is power on. Deliberately not grown in step with the
+    // craft: a plume that scaled proportionally became a warm smear wide enough
+    // to wash out the gate behind it, and the shape of the craft is the thing
+    // worth looking at.
     if (p.throttle > 0.03) {
       const flame = p.throttle * (0.8 + 0.2 * Math.sin(this.time * 37));
-      const g = ctx.createRadialGradient(tail[0], tail[1], 0, tail[0], tail[1], 16 + 10 * flame);
-      g.addColorStop(0, `rgba(232,184,122,${0.55 * flame})`);
+      const g = ctx.createRadialGradient(tail[0], tail[1], 0, tail[0], tail[1], 10 + 6 * flame);
+      g.addColorStop(0, `rgba(232,184,122,${0.4 * flame})`);
       g.addColorStop(1, 'rgba(232,184,122,0)');
       ctx.fillStyle = g;
-      ctx.fillRect(tail[0] - 30, tail[1] - 30, 60, 60);
+      ctx.fillRect(tail[0] - 18, tail[1] - 18, 36, 36);
       ctx.strokeStyle = `rgba(255,220,170,${0.7 * flame})`;
       ctx.lineWidth = 1.6;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(tail[0], tail[1]);
-      ctx.lineTo(tail[0], tail[1] + 5 + 9 * flame);
+      ctx.lineTo(tail[0], tail[1] + 3 + 5 * flame);
       ctx.stroke();
     }
 
     ctx.shadowColor = PALETTE.craftGlow;
-    ctx.shadowBlur = 26;
+    // Blur is in the scaled space, so this is multiplied by CRAFT_SCALE. Held
+    // down from the old value to stop the halo washing out the gate behind.
+    ctx.shadowBlur = 16;
 
     const wing = (root: [number, number], rootB: [number, number], tip: [number, number], lift: number) => {
       const shade = 0.72 + 0.28 * Math.max(0, Math.sin(lift) + 0.4);
