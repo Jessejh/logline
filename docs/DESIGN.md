@@ -266,8 +266,17 @@ deliberate change, not drift:
   moment it turns around. This also drops the prototype's `LIFT`
   offset, which only existed to keep the craft out from under the
   thumb it was pinned to.
-- **A larger craft.** Drawn at 1.5×. The prototype's size reads as a
-  speck at arm's length on a phone.
+- **A much larger craft.** Drawn at 2.6×. The prototype's size reads
+  as a speck at arm's length, and a speck wastes the animation that
+  is already there — each wing is a sprung hinge driven by lift, roll
+  rate and throttle, the body banks and pitches off velocity, and it
+  bobs while hovering. At the old size all of that was a few pixels
+  of flicker; the point of the number is being able to watch it.
+  About two cells wide at a full-size gate, which is wide, but the
+  answer is read off the lit cell and the reticle rather than the
+  silhouette. The exhaust plume is deliberately *not* scaled in step:
+  proportional growth turned it into a warm smear across the gate
+  behind, and the shape of the craft is the thing worth looking at.
 - **Type sized for arm's length.** The question, the hint, the cell
   labels and the screens outside the flight all went up several
   points. 1D cell labels take the larger size only as far as the cell
