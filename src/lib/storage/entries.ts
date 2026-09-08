@@ -1,7 +1,9 @@
+import { computeStats, findPauses, type FlightStats } from '../game/stats';
 import type { Answer, FlightResult, LinePoint } from '../game/types';
 import { all, ENTRIES, put, remove } from './db';
 
-export const ENTRY_VERSION = 1;
+/** 2 added a clock on each line point and the flight statistics. */
+export const ENTRY_VERSION = 2;
 
 export interface Entry {
   /** Unique per flight, not per day — flying twice keeps both records. */
@@ -12,6 +14,13 @@ export interface Entry {
   day: string;
   answers: Answer[];
   line: LinePoint[];
+  /**
+   * How the flight was flown. Taken from the full-resolution line before it is
+   * thinned, because compression flattens the small corrections these measure.
+   * Absent on records written before version 2 — recompute from `line` for
+   * those and accept that the fine detail, and the clock, are gone.
+   */
+  stats?: FlightStats;
   version: number;
 }
 
@@ -24,15 +33,33 @@ function round(n: number, places: number): number {
   return Math.round(n * f) / f;
 }
 
-/** Uniformly thin the flight trail, always keeping the first and last point. */
+/**
+ * Uniformly thin the flight trail, always keeping the first and last point.
+ *
+ * Any point that a pause happened at is kept whatever the stride says. Thinning
+ * is blind to the clock, so a plain every-Nth pass would drop one side of a gap
+ * and take the pause with it — and pauses are the sparsest, most fragile thing
+ * in the record.
+ */
 export function compressLine(line: readonly LinePoint[]): LinePoint[] {
   if (line.length === 0) return [];
   const stride = Math.max(1, Math.ceil(line.length / MAX_POINTS));
-  const out: LinePoint[] = [];
-  for (let i = 0; i < line.length; i += stride) out.push(line[i]);
-  const last = line[line.length - 1];
-  if (out[out.length - 1] !== last) out.push(last);
-  return out.map((p) => ({ nx: round(p.nx, 3), ny: round(p.ny, 3), z: round(p.z, 2) }));
+  const keep = new Set<number>();
+  for (let i = 0; i < line.length; i += stride) keep.add(i);
+  keep.add(0);
+  keep.add(line.length - 1);
+  for (const pause of findPauses(line)) {
+    keep.add(pause.index);
+    keep.add(Math.min(line.length - 1, pause.index + 1));
+  }
+  return [...keep]
+    .sort((a, b) => a - b)
+    .map((i) => {
+      const p = line[i];
+      const out: LinePoint = { nx: round(p.nx, 3), ny: round(p.ny, 3), z: round(p.z, 2) };
+      if (p.t !== undefined) out.t = round(p.t, 2);
+      return out;
+    });
 }
 
 export function localDay(ts: number): string {
@@ -48,8 +75,16 @@ export function makeEntry(result: FlightResult, ts = Date.now()): Entry {
     day: localDay(ts),
     answers: result.answers,
     line: compressLine(result.line),
+    // Measured before the thinning, which is the only place the full detail
+    // still exists.
+    stats: computeStats(result.line),
     version: ENTRY_VERSION
   };
+}
+
+/** The flight's character, recomputed for records that predate `stats`. */
+export function statsFor(entry: Entry): FlightStats {
+  return entry.stats ?? computeStats(entry.line);
 }
 
 export async function saveEntry(entry: Entry): Promise<void> {

@@ -48,6 +48,15 @@ logged line after each flight (`src/lib/game/artwork.ts`). Also
 built: the journal (past flights, on-device), export/import, offline,
 and home-screen install.
 
+After each flight the record becomes a piece: the line drawn flat on
+paper, the ground coloured by the answers, the ink weighted by how
+fast the craft was moved, and a ring wherever the thumb came off. The
+3D object is still there behind a toggle. `docs/DESIGN.md` has a
+section on it — read "The rule this has to keep" before changing
+anything there, because a straight flight and a wandering one must
+stay two kinds of good picture, never a better and a worse one.
+`LinePoint` now carries a clock and `ENTRY_VERSION` is 2.
+
 The collection pipeline is closed. Gates pay credits, the streak
 raises the per-gate rate, the first flight of a local day is the one
 that pays, and credits buy appearance-only upgrades (hull, frames,

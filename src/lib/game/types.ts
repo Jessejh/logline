@@ -38,6 +38,17 @@ export interface LinePoint {
   ny: number;
   /** Distance flown when this point was laid down. */
   z: number;
+  /**
+   * Seconds since the flight began. Absent on records written before this
+   * existed.
+   *
+   * The record only grows while the craft moves, so a pause writes no point at
+   * all — which meant a long hesitation and none at all produced identical
+   * records. With a clock on each point a pause shows up as a large gap in `t`
+   * across a tiny gap in `z`, which is the only way the piece can render the
+   * moments someone stopped to think.
+   */
+  t?: number;
 }
 
 export interface FlightResult {
