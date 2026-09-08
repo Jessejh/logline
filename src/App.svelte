@@ -1,15 +1,18 @@
 <script lang="ts">
   import Artwork from './components/Artwork.svelte';
+  import Collection from './components/Collection.svelte';
   import DesktopGate from './components/DesktopGate.svelte';
   import FlightView from './components/FlightView.svelte';
   import Intro from './components/Intro.svelte';
   import Journal from './components/Journal.svelte';
   import Summary from './components/Summary.svelte';
+  import Workshop from './components/Workshop.svelte';
   import type { FlightResult } from './lib/game/types';
   import { listEntries, makeEntry, saveEntry, type Entry } from './lib/storage/entries';
+  import { applyProfileSkin, awardFlight, loadProfile, type Award } from './lib/storage/profile';
   import { goFullscreen } from './lib/viewport';
 
-  type View = 'intro' | 'flight' | 'artwork' | 'summary' | 'journal';
+  type View = 'intro' | 'flight' | 'artwork' | 'summary' | 'journal' | 'collection' | 'workshop';
 
   let view = $state<View>('intro');
   let entry = $state<Entry | null>(null);
@@ -17,6 +20,8 @@
   let artworkReturn = $state<'summary' | 'journal'>('summary');
   let saveError = $state<string | null>(null);
   let entryCount = $state(0);
+  let award = $state<Award | null>(null);
+  let credits = $state(0);
 
   // Mobile-only is a product constraint, not a preference. Anything wide with a
   // mouse gets told to open this on a phone, with an escape hatch for testing.
@@ -34,10 +39,21 @@
 
   $effect(() => {
     void refreshCount();
+    // Whatever skin is owned has to be on the palette before the first flight
+    // draws a frame, so this runs at startup rather than on entering a flight.
+    void (async () => {
+      const profile = await loadProfile();
+      applyProfileSkin(profile);
+      credits = profile.credits;
+    })();
   });
 
   async function refreshCount() {
     entryCount = (await listEntries()).length;
+  }
+
+  async function refreshCredits() {
+    credits = (await loadProfile()).credits;
   }
 
   async function onFlightComplete(result: FlightResult) {
@@ -49,6 +65,9 @@
     } catch {
       saveError = 'This entry could not be saved on this device. It is still shown below.';
     }
+    // Paid per gate passed, never per answer chosen — see lib/progress/credits.ts.
+    award = await awardFlight(result.answers.length, record.ts);
+    await refreshCredits();
     entry = record;
     artworkReturn = 'summary';
     view = 'artwork';
@@ -70,6 +89,11 @@
     artworkReturn = from;
     view = 'artwork';
   }
+
+  async function leaveWorkshop() {
+    await refreshCredits();
+    view = 'collection';
+  }
 </script>
 
 {#if wide && !bypassGate}
@@ -77,8 +101,10 @@
 {:else if view === 'intro'}
   <Intro
     entryCount={entryCount}
+    credits={credits}
     onBegin={startFlight}
     onJournal={() => (view = 'journal')}
+    onCollection={() => (view = 'collection')}
   />
 {:else if view === 'flight'}
   <FlightView onComplete={onFlightComplete} />
@@ -92,9 +118,11 @@
   <Summary
     entry={entry}
     saveError={saveError}
+    award={award}
     onAgain={startFlight}
     onArtwork={() => entry && showArtwork(entry, 'summary')}
     onJournal={() => (view = 'journal')}
+    onCollection={() => (view = 'collection')}
   />
 {:else if view === 'journal'}
   <Journal
@@ -102,4 +130,8 @@
     onChanged={refreshCount}
     onView={(record) => showArtwork(record, 'journal')}
   />
+{:else if view === 'collection'}
+  <Collection onBack={() => (view = 'intro')} onWorkshop={() => (view = 'workshop')} />
+{:else if view === 'workshop'}
+  <Workshop onBack={leaveWorkshop} />
 {/if}

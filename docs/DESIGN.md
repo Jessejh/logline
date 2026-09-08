@@ -76,20 +76,12 @@ gate is passed the craft glides out on its own.
    - Stored tracks cap at ~7, then auto-merge into a week-flight.
    - Player can skip track and just keep the journal/logline.
 
-3. **Village phase** (not built yet)
-   Persistent home base. Core rules:
-   - **Answers unlock, never remove.** No decay.
-   - Every answer deposits domain resources (sleep, connection,
-     energy, focus, stillness). Low-scale → **raw** materials
-     (rough stone, unfired clay). High-scale → **refined** (polished
-     timber, glass). Different buildings need different mixes, so
-     good weeks and hard weeks each build things the other can't.
-   - Village suggests buildings in its own voice, not as advice.
-   - Buildings have in-flight mechanical effects (Lighthouse extends
-     gate preview, Kiln stabilizes glide, etc.).
-   - Mood shows as **atmosphere** — fog, long shadows, lit windows
-     on low stretches; light returns when things lift. Arguably
-     prettier, not broken.
+3. **Collection and workshop** (built)
+   Where the gathered material goes, and what showing up buys.
+   See "The collection pipeline" below.
+
+The village phase that used to sit at position 3 is parked — see
+"Parked: the village".
 
 ## App structure beyond the game loop
 
@@ -106,6 +98,80 @@ The app has two faces for the user, expressed through the line metaphor:
 
 These aren't separate screens bolted together; they're the same two
 lines that exist during flight, just viewed from outside the cockpit.
+
+## The collection pipeline
+
+Every gate drops exactly one named material, and always has. What
+was missing was anywhere for it to go: materials were visible only
+inside the entry that produced them, so eight a day accumulated
+into nothing you could look at. Three pieces close that.
+
+**Credits come from gates.** A completed flight pays
+`gates × rate`, where the rate rises with the streak — three per
+gate on day one, climbing by one per consecutive day to a cap of
+eight. Eight gates a flight makes a day worth 24 to 64.
+
+The rule that matters is what the award *cannot* see. It is handed
+a gate count, never the answers, so it is impossible for one
+opening to pay more than another. This is not a stylistic
+preference: it is the only reason the journal stays honest, and it
+is enforced in `lib/progress/credits.ts`, which has no access to a
+cell index at all. The old track phase was to be the source of
+points; with it unbuilt, "showing up" is the source instead, which
+suits daily tracking better than precision would have.
+
+**One paying flight a day.** The first flight of a local day pays;
+later ones are recorded in full but earn nothing. Flying twice is
+never blocked — some days want a second look — it just cannot be
+farmed. The streak reads off the journal rather than a counter, so
+importing a backup restores the streak it actually earned.
+
+**Credits buy appearance only.** Hulls, gate frames and skies, one
+equipped per category, stacking. Nothing is scored, so there is no
+performance for an upgrade to improve; an upgrade that made a gate
+easier to hit would be inventing a difficulty the grading phase
+does not have. This carries the village's rule forward: unlocks and
+atmosphere, never advantage.
+
+**Reading the accumulation.** The collection screen shows the
+streak, the balance, a per-question trend across the last fortnight,
+and a running tally of every material gathered. The trends plot the
+column index as it is — no day is ranked, nothing is called good.
+It is a shape to notice, not a score to beat.
+
+The balance lives in its own store rather than being recomputed
+from the journal, so deleting an entry does not confiscate what it
+earned. Pruning the journal has to stay safe.
+
+## Parked: the village
+
+Not cancelled, not being built. Kept here because the reasoning is
+load-bearing elsewhere.
+
+- **Answers unlock, never remove.** No decay.
+- Every answer deposits domain resources (sleep, connection,
+  energy, focus, stillness). Low-scale → **raw** materials
+  (rough stone, unfired clay). High-scale → **refined** (polished
+  timber, glass). Different buildings need different mixes, so
+  good weeks and hard weeks each build things the other can't.
+- Village suggests buildings in its own voice, not as advice.
+- Buildings have in-flight mechanical effects (Lighthouse extends
+  gate preview, Kiln stabilizes glide, etc.).
+- Mood shows as **atmosphere** — fog, long shadows, lit windows
+  on low stretches; light returns when things lift. Arguably
+  prettier, not broken.
+
+The symmetric-mix idea in the second bullet is the thing worth
+keeping: it is how the village would have made a hard week and a
+good week equally productive. Credits reach the same end by a
+blunter route — paying per gate, so the question never arises. If
+anything ever spends *specific* materials rather than credits, that
+bullet is the design to return to, because recipes that want one
+material more than another are exactly how answer-farming starts.
+
+Note also that the buildings' in-flight effects would break the
+current rule that upgrades are cosmetic. Un-parking the village
+means reopening that, not assuming it.
 
 ## Resource-farming risk
 
@@ -149,8 +215,10 @@ projected line (dashed trajectory from current velocity), the
 and 2D gates, item pickups, and the summary where the logged line
 becomes the entry.
 
-Around it: a journal of past flights held on the device, JSON export
-and import, offline use, and home-screen install.
+Around it: a journal of past flights held on the device, the
+collection screen and workshop described above, JSON export and
+import (which carries the credit balance and bought skins too),
+offline use, and home-screen install.
 
 `prototypes/grading-phase.html` is the original self-contained
 HTML/JS build. It is kept frozen as the feel reference; the port
@@ -234,7 +302,21 @@ rotation mid-flight can't warp the trail.
   repeat players. Hold-to-fly makes the pace the player's, which may
   be enough; watch whether people just hold the whole way through.
 - Track-phase generation rules undesigned.
-- Village building list, recipes, and in-flight effects undesigned.
+- Village is parked, not designed — see "Parked: the village".
 - How exactly does the projected line translate into todo/planning
   in the non-flight UI? The metaphor is clear; the UX is not
   designed yet.
+- **Does a different vehicle break the core visual concept?** A
+  submarine has been raised, and it is a bigger change than a
+  reskin. The whole spatial read depends on there being no horizon
+  and no ground — "could be falling or gliding" is the point.
+  Underwater supplies a surface above and a seabed below, which is
+  exactly the up and down the design removes. Worth doing only with
+  an answer to what replaces the ambiguity, so a vehicle is
+  deliberately not in the workshop yet. The skin system would carry
+  one the moment that is settled.
+- Are the upgrade prices right? 24–64 credits a day against a 60–260
+  catalogue is a guess, made before anyone has lived a week of it.
+- The trends plot the day's *first* flight, matching the flight that
+  pays. If someone routinely flies twice, the second is invisible on
+  the chart — is that the right reading of the day?

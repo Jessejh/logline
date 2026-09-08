@@ -50,7 +50,9 @@
     if (!file) return;
     try {
       const report = await importEntries(file);
-      status = `Imported ${report.added}, skipped ${report.skipped} already here.`;
+      status =
+        `Imported ${report.added}, skipped ${report.skipped} already here.` +
+        (report.progressRestored ? ' Credits and upgrades restored too.' : '');
       await refresh();
     } catch (err) {
       status = err instanceof Error ? err.message : 'Import failed.';

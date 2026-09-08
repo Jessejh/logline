@@ -1,8 +1,10 @@
 <script lang="ts">
-  let { onBegin, onJournal, entryCount }: {
+  let { onBegin, onJournal, onCollection, entryCount, credits }: {
     onBegin: () => void;
     onJournal: () => void;
+    onCollection: () => void;
     entryCount: number;
+    credits: number;
   } = $props();
 </script>
 
@@ -21,6 +23,9 @@
   <div class="actions">
     <button onclick={onBegin}>Begin</button>
     {#if entryCount > 0}
+      <button class="quiet" onclick={onCollection}>
+        Gathered · {credits}
+      </button>
       <button class="quiet" onclick={onJournal}>
         Journal · {entryCount}
       </button>
