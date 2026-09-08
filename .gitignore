@@ -1,0 +1,16 @@
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+node_modules/
+dist/
+build/
+.env
+.env.local
+.godot/
+*.import
+export_presets.cfg
+*.log
+
+# vite-plugin-pwa dev output
+dev-dist/

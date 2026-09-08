@@ -1,0 +1,219 @@
+/*
+ * Global tokens, reset, and the handful of classes the veil screens share.
+ * Colours mirror `src/lib/game/palette.ts`, which the canvas reads.
+ */
+:root {
+  --void: #050810;
+  --deep: #0c1228;
+  --teal: #2d6b7a;
+  --ice: #a8d5d8;
+  --lamp: #e8b87a;
+  --violet: #7b6b9a;
+  --trail: #4a8fa0;
+  --dim: #5a7a86;
+  --mid: #6d95a0;
+  --bright: #e6f2f2;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+}
+
+body {
+  font-family: var(--sans);
+  color: var(--ice);
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+canvas {
+  display: block;
+}
+
+/* A full-screen panel over the flight: intro, summary, journal. */
+.veil {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 34px 28px calc(env(safe-area-inset-bottom) + 28px);
+  background:
+    radial-gradient(110% 70% at 50% 35%, rgba(12, 18, 40, 0.6), transparent 70%),
+    rgba(5, 8, 16, 0.96);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.veil.top {
+  justify-content: flex-start;
+  padding-top: calc(env(safe-area-inset-top) + 28px);
+}
+
+h1 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 36px;
+  line-height: 1.15;
+  color: var(--bright);
+  margin-bottom: 6px;
+}
+
+h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 24px;
+  color: var(--bright);
+  margin-bottom: 18px;
+}
+
+.sub {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--dim);
+  letter-spacing: 0.03em;
+  margin-bottom: 22px;
+}
+
+.lede {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.65;
+  color: #7fa3ad;
+  max-width: 30em;
+  margin-bottom: 12px;
+}
+
+.howto {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--dim);
+  margin-top: 18px;
+}
+
+.howto b {
+  color: #8fb8c2;
+  font-weight: 600;
+}
+
+button {
+  background: none;
+  border: 1px solid rgba(232, 184, 122, 0.45);
+  color: var(--lamp);
+  font-family: var(--sans);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  padding: 14px 28px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+button:active {
+  background: rgba(232, 184, 122, 0.1);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--lamp);
+  outline-offset: 3px;
+}
+
+button.quiet {
+  border-color: rgba(45, 107, 122, 0.5);
+  color: var(--ice);
+}
+
+button.small {
+  font-size: 13px;
+  padding: 10px 16px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(45, 107, 122, 0.22);
+}
+
+.row .q {
+  font-family: var(--serif);
+  font-size: 14.5px;
+  color: var(--mid);
+  flex: 1;
+}
+
+.row .a {
+  font-size: 13.5px;
+  color: #d0e8e8;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.row .a.edge {
+  color: var(--lamp);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 2px;
+  border: 1px solid rgba(45, 107, 122, 0.45);
+  color: var(--ice);
+}
+
+.chip.raw {
+  border-color: rgba(123, 107, 154, 0.55);
+  color: #b0a0c8;
+}
+
+.chip.ref {
+  border-color: rgba(232, 184, 122, 0.4);
+  color: #dfc090;
+}
+
+.note {
+  margin-top: 24px;
+  font-family: var(--serif);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--mid);
+  border-left: 1px solid rgba(45, 107, 122, 0.45);
+  padding-left: 14px;
+}
+
+.caption {
+  font-size: 13px;
+  color: var(--dim);
+  margin-bottom: 10px;
+}
