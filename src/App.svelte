@@ -7,6 +7,7 @@
   import Summary from './components/Summary.svelte';
   import type { FlightResult } from './lib/game/types';
   import { listEntries, makeEntry, saveEntry, type Entry } from './lib/storage/entries';
+  import { goFullscreen } from './lib/viewport';
 
   type View = 'intro' | 'flight' | 'artwork' | 'summary' | 'journal';
 
@@ -53,6 +54,17 @@
     view = 'artwork';
   }
 
+  /**
+   * Entering the flight is the one moment there is a user gesture to spend on
+   * fullscreen, which is the only way to be rid of the URL bar in a browser.
+   * It quietly does nothing on iPhone, where no such API exists — installing
+   * to the home screen is the answer there.
+   */
+  function startFlight() {
+    void goFullscreen();
+    view = 'flight';
+  }
+
   function showArtwork(record: Entry, from: 'summary' | 'journal') {
     entry = record;
     artworkReturn = from;
@@ -65,7 +77,7 @@
 {:else if view === 'intro'}
   <Intro
     entryCount={entryCount}
-    onBegin={() => (view = 'flight')}
+    onBegin={startFlight}
     onJournal={() => (view = 'journal')}
   />
 {:else if view === 'flight'}
@@ -80,7 +92,7 @@
   <Summary
     entry={entry}
     saveError={saveError}
-    onAgain={() => (view = 'flight')}
+    onAgain={startFlight}
     onArtwork={() => entry && showArtwork(entry, 'summary')}
     onJournal={() => (view = 'journal')}
   />

@@ -2,6 +2,7 @@ import { gateZ } from './flight';
 import { PALETTE } from './palette';
 import { QUESTIONS } from './questions';
 import type { Answer, LinePoint } from './types';
+import { visibleHeight, visibleWidth } from '../viewport';
 
 /**
  * The logged line as a small sculpture: the whole flight laid out in 3D,
@@ -142,6 +143,7 @@ export class Artwork {
     this.cvs.addEventListener('pointerup', this.onUp);
     this.cvs.addEventListener('pointercancel', this.onUp);
     addEventListener('resize', this.onResize);
+    visualViewport?.addEventListener('resize', this.onResize);
     this.running = true;
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.loop);
@@ -155,12 +157,15 @@ export class Artwork {
     this.cvs.removeEventListener('pointerup', this.onUp);
     this.cvs.removeEventListener('pointercancel', this.onUp);
     removeEventListener('resize', this.onResize);
+    visualViewport?.removeEventListener('resize', this.onResize);
   }
 
   private layout(): void {
     this.DPR = Math.min(devicePixelRatio || 1, 2.5);
-    this.W = innerWidth;
-    this.H = innerHeight;
+    // The visible area, so browser chrome doesn't crop the piece — see
+    // `lib/viewport.ts`.
+    this.W = visibleWidth();
+    this.H = visibleHeight();
     this.cvs.width = Math.round(this.W * this.DPR);
     this.cvs.height = Math.round(this.H * this.DPR);
     this.cvs.style.width = `${this.W}px`;
