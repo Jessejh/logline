@@ -42,13 +42,16 @@
 <style>
   canvas {
     position: fixed;
-    inset: 0;
+    left: 0;
+    right: 0;
+    top: var(--app-top);
+    height: var(--app-h);
     touch-action: none;
   }
 
   .cap {
     position: fixed;
-    top: calc(var(--safe-top) + 26px);
+    top: calc(var(--app-top) + var(--app-inset) + 26px);
     left: 0;
     right: 0;
     padding: 0 28px;

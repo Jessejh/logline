@@ -39,32 +39,50 @@
 </script>
 
 <canvas bind:this={canvas}></canvas>
-<div class="question" class:on={question !== null}>{question ?? ''}</div>
-<div class="hint" class:on={hint}>
-  {#if everHeld}
-    Hold to fly on
-  {:else}
-    Hold anywhere to fly · let go to think
-  {/if}
+<!-- Pinned to the visible area rather than the layout viewport, so a URL bar
+     at either edge can't sit on top of the text. -->
+<div class="hud">
+  <div class="question" class:on={question !== null}>{question ?? ''}</div>
+  <div class="hint" class:on={hint}>
+    {#if everHeld}
+      Hold to fly on
+    {:else}
+      Hold anywhere to fly · let go to think
+    {/if}
+  </div>
 </div>
 
 <style>
   canvas {
     position: fixed;
-    inset: 0;
-  }
-
-  /* Leaves room for the mirror the canvas hangs from the top edge. */
-  .question {
-    position: fixed;
-    top: calc(var(--safe-top) + 82px);
     left: 0;
     right: 0;
-    padding: 0 28px;
+    /* The visible area, not the layout viewport — see `lib/viewport.ts`. */
+    top: var(--app-top);
+    height: var(--app-h);
+  }
+
+  .hud {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--app-top);
+    height: var(--app-h);
+    pointer-events: none;
+  }
+
+  /* Below the mirror the canvas hangs from the top edge, and below whatever
+     browser chrome --app-inset has accounted for. */
+  .question {
+    position: absolute;
+    top: calc(var(--app-inset) + 88px);
+    left: 0;
+    right: 0;
+    padding: 0 24px;
     text-align: center;
     font-family: var(--serif);
-    font-size: 22px;
-    line-height: 1.45;
+    font-size: 27px;
+    line-height: 1.4;
     color: #cfe6e8;
     opacity: 0;
     transition: opacity 0.7s ease;
@@ -77,12 +95,12 @@
   }
 
   .hint {
-    position: fixed;
+    position: absolute;
     left: 0;
     right: 0;
     bottom: calc(env(safe-area-inset-bottom) + 36px);
     text-align: center;
-    font-size: 13.5px;
+    font-size: 16px;
     letter-spacing: 0.02em;
     color: var(--dim);
     opacity: 0;

@@ -1,6 +1,7 @@
 import { PALETTE } from './palette';
 import { QUESTIONS } from './questions';
 import type { Answer, FlightResult, LinePoint, Question } from './types';
+import { visibleHeight, visibleWidth } from '../viewport';
 
 /**
  * The grading phase: one first-person flight through eight question-gates.
@@ -19,8 +20,18 @@ const FOCAL = 7;
 const SPEED = 3.45;
 const SPACING = 13.5;
 const FIRST_GATE = 17;
-/** Vertical offset so the craft sits above the thumb rather than under it. */
-const LIFT = 96;
+
+/**
+ * Screen px of steering per px of thumb travel. Above 1 so a comfortable
+ * thumb arc covers the whole grid without stretching for the far corners;
+ * low enough that the craft still reads as following the finger.
+ */
+const STEER_GAIN = 1.35;
+/**
+ * How big the craft is drawn. The mesh is modelled at the prototype's size;
+ * this brings it closer to the camera so it is legible at arm's length.
+ */
+const CRAFT_SCALE = 1.5;
 
 /** How long a passed gate is kept around — the mirror watches it recede. */
 const KEEP_BEHIND = 48;
@@ -127,6 +138,14 @@ export class Flight {
   };
   private held = false;
   private pointerId: number | null = null;
+  /** Where the thumb went down, and where the craft was aimed at the time. */
+  private grabX = 0;
+  private grabY = 0;
+  private grabTx = 0;
+  private grabTy = 0;
+  /** Last seen thumb position, so a resize can re-anchor without a jump. */
+  private lastPx = 0;
+  private lastPy = 0;
   private loggedLine: LinePoint[] = [];
   private lastLoggedZ = -1;
   private gates: Gate[] = [];
@@ -148,6 +167,13 @@ export class Flight {
   private readonly onResize = () => {
     this.layout();
     this.clampPlane();
+    // A rotation, or chrome sliding in and out, moves the grid out from under
+    // the thumb. Re-anchor on the spot so the next drag carries on from where
+    // the craft now is rather than snapping by the difference.
+    this.grabX = this.lastPx;
+    this.grabY = this.lastPy;
+    this.grabTx = this.plane.tx;
+    this.grabTy = this.plane.ty;
   };
 
   private readonly onPointerDown = (e: PointerEvent) => {
@@ -161,7 +187,7 @@ export class Flight {
       /* not every browser hands out capture for touch; tracking still works */
     }
     this.setHeld(true);
-    this.steerTo(e);
+    this.anchor(e);
   };
 
   private readonly onPointerMove = (e: PointerEvent) => {
@@ -195,6 +221,9 @@ export class Flight {
     this.cvs.addEventListener('pointerup', this.onPointerUp);
     this.cvs.addEventListener('pointercancel', this.onPointerUp);
     addEventListener('resize', this.onResize);
+    // Chrome sliding in and out resizes the visual viewport without firing a
+    // window resize, so the canvas would keep the stale height.
+    visualViewport?.addEventListener('resize', this.onResize);
     this.running = true;
     this.last = performance.now();
     this.handlers.onHold?.(false);
@@ -209,14 +238,46 @@ export class Flight {
     this.cvs.removeEventListener('pointerup', this.onPointerUp);
     this.cvs.removeEventListener('pointercancel', this.onPointerUp);
     removeEventListener('resize', this.onResize);
+    visualViewport?.removeEventListener('resize', this.onResize);
   }
 
   /* ── input ── */
 
+  /**
+   * Steering is relative to where the thumb went down, not to where it is.
+   *
+   * The prototype set the target to the touch point outright, which meant a
+   * touch anywhere but under the craft threw it across the screen — press near
+   * the top edge and it warped up there. Anchoring instead means putting a
+   * thumb down changes nothing, and the craft turns only as far as the thumb
+   * travels. It also frees the player to reach from wherever the hand already
+   * is, which absolute steering never allowed.
+   */
+  private anchor(e: PointerEvent): void {
+    this.grabX = this.lastPx = e.clientX;
+    this.grabY = this.lastPy = e.clientY;
+    this.grabTx = this.plane.tx;
+    this.grabTy = this.plane.ty;
+  }
+
   private steerTo(e: PointerEvent): void {
-    this.plane.tx = e.clientX;
-    this.plane.ty = e.clientY - LIFT;
-    this.clampPlane();
+    this.lastPx = e.clientX;
+    this.lastPy = e.clientY;
+    const rawX = this.grabTx + (e.clientX - this.grabX) * STEER_GAIN;
+    const rawY = this.grabTy + (e.clientY - this.grabY) * STEER_GAIN;
+    const mx = this.GW / 2 - 10;
+    const my = this.GH / 2 - 10;
+    const x = Math.max(this.CX - mx, Math.min(this.CX + mx, rawX));
+    const y = Math.max(this.CY - my, Math.min(this.CY + my, rawY));
+
+    // Drag past an edge and the overshoot is folded back into the anchor, so
+    // the craft picks the thumb up again the instant it turns around instead
+    // of lagging by however far it was pushed into the wall.
+    this.grabX += (rawX - x) / STEER_GAIN;
+    this.grabY += (rawY - y) / STEER_GAIN;
+
+    this.plane.tx = x;
+    this.plane.ty = y;
   }
 
   private setHeld(held: boolean): void {
@@ -234,8 +295,11 @@ export class Flight {
 
   private layout(): void {
     this.DPR = Math.min(devicePixelRatio || 1, 2.5);
-    this.W = innerWidth;
-    this.H = innerHeight;
+    // The visual viewport, not the layout one: with a URL bar showing the two
+    // differ by the height of the bar, and drawing to the larger of them puts
+    // the mirror and the question underneath it.
+    this.W = visibleWidth();
+    this.H = visibleHeight();
     this.cvs.width = Math.round(this.W * this.DPR);
     this.cvs.height = Math.round(this.H * this.DPR);
     this.cvs.style.width = `${this.W}px`;
@@ -246,7 +310,7 @@ export class Flight {
     this.CX = this.W / 2;
     this.CY = this.H * 0.44;
     const root = getComputedStyle(document.documentElement);
-    this.safeTop = parseFloat(root.getPropertyValue('--safe-top')) || 0;
+    this.safeTop = parseFloat(root.getPropertyValue('--app-inset')) || 0;
     this.fontFamily = getComputedStyle(document.body).fontFamily || this.fontFamily;
 
     // The mirror hangs from the top edge, the way one hangs from a windscreen.
@@ -266,6 +330,8 @@ export class Flight {
     p.wingLv = p.wingRv = 0;
     this.held = false;
     this.pointerId = null;
+    this.grabX = this.grabTx = p.tx;
+    this.grabY = this.grabTy = p.ty;
     this.loggedLine = [];
     this.lastLoggedZ = -1;
     this.answers = [];
@@ -484,7 +550,7 @@ export class Flight {
         : g.q.cols[ix];
 
     this.answers.push({ q: g.q.q, label, item: g.q.items[ix], edge, refined, ix, iy });
-    this.pops.push({ text: `+ ${g.q.items[ix]}`, x: this.plane.x, y: this.plane.y - 30, t: 0, edge });
+    this.pops.push({ text: `+ ${g.q.items[ix]}`, x: this.plane.x, y: this.plane.y - 44, t: 0, edge });
 
     for (let i = 0; i < 18; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -562,7 +628,7 @@ export class Flight {
       const k = pop.t / 2.3;
       ctx.globalAlpha = k < 0.12 ? k / 0.12 : Math.max(0, (1 - k) * 1.5);
       ctx.fillStyle = pop.edge ? PALETTE.lamp : '#bfe0e2';
-      ctx.font = `500 13px ${this.fontFamily}`;
+      ctx.font = `500 16px ${this.fontFamily}`;
       ctx.textAlign = 'center';
       ctx.fillText(pop.text, pop.x, pop.y - k * 54);
     }
@@ -732,6 +798,7 @@ export class Flight {
 
     ctx.save();
     ctx.translate(p.x, p.y + bob);
+    ctx.scale(CRAFT_SCALE, CRAFT_SCALE);
 
     // Exhaust while there is power on.
     if (p.throttle > 0.03) {
@@ -890,15 +957,23 @@ export class Flight {
       ctx.fillStyle = PALETTE.label;
       ctx.textAlign = 'center';
       if (g.q.type === '1d') {
-        const fs = Math.min(14, Math.max(8.5, cw * 0.15));
+        // Big enough to read at arm's length, then pulled back down if the
+        // widest label would run into its neighbour — the floor is there for
+        // legibility, not to let the row collide while the gate is still far.
+        let fs = Math.min(19, Math.max(11.5, cw * 0.2));
+        ctx.font = `600 ${fs * 1.12}px ${this.fontFamily}`;
+        let widest = 0;
+        for (const c of g.q.cols) widest = Math.max(widest, ctx.measureText(c).width);
+        if (widest > cw - 6) fs *= (cw - 6) / widest;
+
         for (let i = 0; i < nx; i++) {
           const hit = aimed && !g.done && this.aim.ix === i;
           ctx.fillStyle = hit ? '#e6f2f2' : PALETTE.label;
           ctx.font = `${hit ? 600 : 500} ${hit ? fs * 1.12 : fs}px ${this.fontFamily}`;
-          ctx.fillText(g.q.cols[i], x0 + i * cw + cw / 2, y0 + h - 12 * s - 2);
+          ctx.fillText(g.q.cols[i], x0 + i * cw + cw / 2, y0 + h - 14 * s - 4);
         }
       } else if (g.q.xAxis && g.q.yAxis) {
-        const fs = Math.min(13, Math.max(8.5, w * 0.035));
+        const fs = Math.min(17, Math.max(11, w * 0.045));
         ctx.font = `500 ${fs}px ${this.fontFamily}`;
         ctx.fillText(g.q.yAxis[0], CX, y0 - 8);
         ctx.fillText(g.q.yAxis[1], CX, y0 + h + fs + 5);
@@ -911,7 +986,7 @@ export class Flight {
         if (aimed && !g.done && s > 0.45) {
           const rows = g.q.rows?.length ?? 1;
           const text = `${g.q.xAxis[this.aim.ix < nx / 2 ? 0 : 1]} · ${g.q.yAxis[this.aim.iy < rows / 2 ? 0 : 1]}`;
-          const cfs = Math.min(11.5, Math.max(7.5, cw * 0.14));
+          const cfs = Math.min(15, Math.max(10, cw * 0.185));
           ctx.textAlign = 'center';
           ctx.fillStyle = '#e6f2f2';
           ctx.font = `600 ${cfs}px ${this.fontFamily}`;

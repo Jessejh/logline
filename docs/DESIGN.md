@@ -187,6 +187,41 @@ deliberate change, not drift:
   line is drawn in 3D through the eight gate frames, with the picked
   cells and item names. Drag to turn, auto-turns when idle. Reachable
   again from the summary and from any journal entry.
+- **Steering is relative, not absolute.** The prototype set the
+  craft's target straight to the touch point, so putting a thumb down
+  anywhere but on the craft threw it across the screen — press near
+  the top edge and it warped up there. Now a touch anchors: pressing
+  changes nothing, and the craft turns only as far as the thumb
+  travels from where it went down, at a gain of 1.35 so a comfortable
+  arc still covers the whole grid. Overshoot past an edge is folded
+  back into the anchor, so the craft picks the thumb up again the
+  moment it turns around. This also drops the prototype's `LIFT`
+  offset, which only existed to keep the craft out from under the
+  thumb it was pinned to.
+- **A larger craft.** Drawn at 1.5×. The prototype's size reads as a
+  speck at arm's length on a phone.
+- **Type sized for arm's length.** The question, the hint, the cell
+  labels and the screens outside the flight all went up several
+  points. 1D cell labels take the larger size only as far as the cell
+  can hold it — measured per gate, so a distant gate shrinks them
+  rather than letting the row collide.
+
+### Owning the screen
+
+A browser's URL bar is not part of the page but it covers it, and
+`position: fixed; inset: 0` sizes to the layout viewport, which
+ignores it — so the question and the mirror sat underneath it.
+`src/lib/viewport.ts` publishes the *visual* viewport as CSS variables
+(`--app-h`, `--app-top`, `--app-inset`) that the canvases and the
+screens lay out against, and asks for real fullscreen on the Begin tap,
+which is the one user gesture available to spend on it.
+
+Fullscreen is Android-only in practice, alongside the vibration API:
+iOS Safari exposes `webkitRequestFullscreen` on video elements only,
+never on the document, so there is no way to dismiss the bar from
+script on an iPhone. Installing to the home screen remains the iOS
+answer, which is one more reason the install hint and JSON export are
+not optional polish.
 
 The logged line is stored normalised into the gate frame rather than
 in screen pixels, so a record draws the same on any phone and a
