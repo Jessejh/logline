@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Artwork from './components/Artwork.svelte';
   import DesktopGate from './components/DesktopGate.svelte';
   import FlightView from './components/FlightView.svelte';
   import Intro from './components/Intro.svelte';
@@ -7,10 +8,12 @@
   import type { FlightResult } from './lib/game/types';
   import { listEntries, makeEntry, saveEntry, type Entry } from './lib/storage/entries';
 
-  type View = 'intro' | 'flight' | 'summary' | 'journal';
+  type View = 'intro' | 'flight' | 'artwork' | 'summary' | 'journal';
 
   let view = $state<View>('intro');
   let entry = $state<Entry | null>(null);
+  /** Where the artwork hands back to: the summary after a flight, or the journal. */
+  let artworkReturn = $state<'summary' | 'journal'>('summary');
   let saveError = $state<string | null>(null);
   let entryCount = $state(0);
 
@@ -46,7 +49,14 @@
       saveError = 'This entry could not be saved on this device. It is still shown below.';
     }
     entry = record;
-    view = 'summary';
+    artworkReturn = 'summary';
+    view = 'artwork';
+  }
+
+  function showArtwork(record: Entry, from: 'summary' | 'journal') {
+    entry = record;
+    artworkReturn = from;
+    view = 'artwork';
   }
 </script>
 
@@ -60,13 +70,24 @@
   />
 {:else if view === 'flight'}
   <FlightView onComplete={onFlightComplete} />
+{:else if view === 'artwork' && entry}
+  <Artwork
+    entry={entry}
+    continueLabel={artworkReturn === 'summary' ? 'Continue' : 'Back'}
+    onContinue={() => (view = artworkReturn)}
+  />
 {:else if view === 'summary' && entry}
   <Summary
     entry={entry}
     saveError={saveError}
     onAgain={() => (view = 'flight')}
+    onArtwork={() => entry && showArtwork(entry, 'summary')}
     onJournal={() => (view = 'journal')}
   />
 {:else if view === 'journal'}
-  <Journal onBack={() => (view = 'intro')} onChanged={refreshCount} />
+  <Journal
+    onBack={() => (view = 'intro')}
+    onChanged={refreshCount}
+    onView={(record) => showArtwork(record, 'journal')}
+  />
 {/if}

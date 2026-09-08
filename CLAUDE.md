@@ -34,15 +34,21 @@ Stars only. Could be falling or gliding. 3D feel comes from roll
 
 ## Current state
 
-The grading phase runs as an installable web app in `src/`. It is a
-faithful port of the prototype: the physics constants in
-`src/lib/game/flight.ts` are the prototype's, unchanged. Also built:
-the journal (past flights, on-device), export/import, offline, and
-home-screen install.
+The grading phase runs as an installable web app in `src/`. It began
+as a faithful port of the prototype and the steering constants in
+`src/lib/game/flight.ts` are still the prototype's, unchanged. On top
+of that: hold-to-fly (the thumb is the throttle), the aimed cell lit
+on the next gate, the trail drawn behind the craft, a rear-view
+mirror, a small 3D craft with hinged wings, and a 3D artwork of the
+logged line after each flight (`src/lib/game/artwork.ts`). Also
+built: the journal (past flights, on-device), export/import, offline,
+and home-screen install.
 
 `prototypes/grading-phase.html` stays as the feel reference. It is
 frozen — fix the port, not the prototype, and don't let the two drift
-without saying so.
+without saying so. Every place the port deliberately differs is
+listed in `docs/DESIGN.md` under "Divergences from the prototype";
+add to that list when you add another.
 
 Track phase and village phase are still unbuilt and still undesigned.
 
@@ -55,8 +61,9 @@ read it before proposing a change, it lists what was rejected and why.
 Two rules that come out of it:
 
 - **The flight engine imports nothing from Svelte.** `src/lib/game/`
-  is a plain class taking a canvas and callbacks. Keep it that way;
-  it's what makes a later native or engine move cheap.
+  is plain classes taking a canvas and callbacks — the flight and the
+  artwork alike. Keep it that way; it's what makes a later native or
+  engine move cheap.
 - **Storage stays behind `src/lib/storage/`.** No component touches
   IndexedDB directly. Opt-in sync, if it ever exists, is another
   driver behind that interface — not a rewrite.

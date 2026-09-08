@@ -8,14 +8,16 @@ A mobile-only game that gamifies daily reflection through flight.
 Two lines define the entire experience:
 
 1. **The logged line** (behind you) — a permanent trail of everywhere
-   you've been during this flight. It shrinks into perspective behind
-   the craft, converging toward a vanishing point. This is the record.
-   At the end of a session, a miniature of this line *is* the journal
-   entry — a drawn shape of your day.
+   you've been during this flight. From the cockpit it leaves the tail
+   and drops away beneath you; in the rear-view mirror it converges
+   toward a vanishing point. This is the record. At the end of a
+   session, a miniature of this line *is* the journal entry — a drawn
+   shape of your day — and the whole line can be turned in 3D.
 
 2. **The projected line** (ahead of you) — a dashed, fading line
-   showing where you'll go if you keep your current heading. It
-   updates constantly as you move. This is intention, direction,
+   showing where you'll go if you keep your current heading, ending
+   in a reticle on the cell of the next gate you are on course for.
+   It updates constantly as you move. This is intention, direction,
    plan — the todo-list half of the app expressed as physics. The
    moment you change course, the projection shifts with you.
 
@@ -30,10 +32,16 @@ horizon, no ground plane, no sky: it's space. Stars stream past. This
 removes the "flight sim" expectation and makes the movement feel
 contemplative rather than vehicular.
 
-The craft responds to thumb input through roll (banking on x-velocity)
-and pitch (stretching on y-velocity), which creates the 3D read
-without needing actual 3D rendering. A center spine line on the body
-sells the depth.
+The craft responds to thumb input through roll (banking on x-velocity),
+pitch (on y-velocity) and a little yaw, applied to a tiny 3D mesh: a
+diamond body, a fin, and two wings hinged at the root that flex with
+lift, roll rate and power. Seen from above and behind. A center spine
+line on the body sells the depth.
+
+The thumb is also the throttle. The craft flies forward only while
+the thumb is down; lift it and everything holds still, so there is
+always time to read a question before answering it. Once the last
+gate is passed the craft glides out on its own.
 
 ## The loop, top to bottom
 
@@ -54,8 +62,12 @@ sells the depth.
    Each gate passed drops one named material, shown in a popup.
 
    The logged line draws behind you as you fly. The projected line
-   points ahead. At session end, the shape of the logged line is the
-   visual signature of this day's entry.
+   points ahead and lights the cell it will land in. A rear-view
+   mirror at the top of the screen shows the line and the passed
+   gates receding, each with its chosen cell lit. At session end, the
+   shape of the logged line is the visual signature of this day's
+   entry, first shown as a 3D piece — the line threaded through the
+   eight frames — that can be turned with a thumb.
 
 2. **Track phase** (not built yet)
    Answers assemble into a procedural track. Precision-flying phase.
@@ -142,9 +154,39 @@ and import, offline use, and home-screen install.
 
 `prototypes/grading-phase.html` is the original self-contained
 HTML/JS build. It is kept frozen as the feel reference; the port
-carries its physics constants unchanged. Treat those constants as
+carries its steering constants unchanged. Treat those constants as
 starting tuning, not final — but change them in `src/`, not in the
 prototype.
+
+### Divergences from the prototype
+
+The port has moved past the prototype in these ways. Each is a
+deliberate change, not drift:
+
+- **Hold to fly.** The prototype flew forward on its own, which left
+  hardly any time to think. Now forward motion needs the thumb down;
+  lifting it pauses the flight. The record only grows while moving,
+  so a pause leaves no mark. After the last gate the craft glides out
+  by itself so the flight always completes.
+- **The aim is shown.** The steering is simulated ahead to the next
+  gate, the cell it lands in is lit (same colour at every position —
+  it says "here", never "better"), the 1D label under it brightens,
+  and 2D gates name the aimed cell. The projected line follows that
+  simulated path and ends in a reticle on the gate.
+- **The trail is behind the craft.** The prototype's logged line
+  converged to the same vanishing point as the gates, so it read as
+  going ahead. It now sweeps down and off the bottom of the screen
+  from a camera above and behind the craft.
+- **A rear-view mirror.** Hangs from the top edge, mirrored
+  left-to-right. Shows the whole trail converging to its vanishing
+  point and the passed gates receding with their chosen cell lit.
+- **A winged craft.** A small 3D mesh replaces the flat diamond.
+  Wings are stiff hinges driven by lift, roll rate and throttle, with
+  an exhaust glow while there is power on.
+- **The artwork.** After the flight, before the summary, the logged
+  line is drawn in 3D through the eight gate frames, with the picked
+  cells and item names. Drag to turn, auto-turns when idle. Reachable
+  again from the summary and from any journal entry.
 
 The logged line is stored normalised into the gate frame rather than
 in screen pixels, so a record draws the same on any phone and a
@@ -153,7 +195,9 @@ rotation mid-flight can't warp the trail.
 ## Open questions
 
 - Does the 2D matrix read as answering or just steering?
-- Gate speed (~4s) tuned for calm — may bore repeat players.
+- Gate speed (~4s of flying per gate) tuned for calm — may bore
+  repeat players. Hold-to-fly makes the pace the player's, which may
+  be enough; watch whether people just hold the whole way through.
 - Track-phase generation rules undesigned.
 - Village building list, recipes, and in-flight effects undesigned.
 - How exactly does the projected line translate into todo/planning

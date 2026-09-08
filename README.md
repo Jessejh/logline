@@ -19,9 +19,11 @@ village phase are designed on paper, not built.
 What works today:
 
 - The eight-question flight, ported from the prototype with its
-  physics constants unchanged.
-- The logged line and projected line, and the summary where the
-  logged line becomes the journal entry.
+  steering constants unchanged. Hold to fly, lift to think.
+- The logged line and projected line, the lit cell you are on course
+  for, a rear-view mirror, and the summary where the logged line
+  becomes the journal entry.
+- The line turned in 3D after each flight, and again from the journal.
 - A journal of past flights, stored on the device, with JSON export
   and import.
 - Offline use and home-screen install.
@@ -73,7 +75,7 @@ docs/          design decisions, rejected ideas, open questions
 docs/adr/      decision records
 prototypes/    throwaway reference builds — not production code
 scripts/       one-off build tooling (icon rendering)
-src/lib/game/  the flight: engine, questions, palette, miniature
+src/lib/game/  the flight: engine, questions, palette, miniature, artwork
 src/lib/storage/  on-device records, export/import
 src/components/   the screens outside the flight
 ```

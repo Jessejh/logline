@@ -14,7 +14,7 @@
     line ahead is where you're pointing.
   </p>
   <p class="howto">
-    Hold your thumb anywhere and drag. The craft follows.<br /><br />
+    Hold your thumb anywhere to fly, drag to steer. Lift it and the craft waits while you think.<br /><br />
     Each frame ahead is one question. <b>Pass through the opening you mean.</b> Every cell gives you material
     — edges aren't worth more, they're just different.
   </p>

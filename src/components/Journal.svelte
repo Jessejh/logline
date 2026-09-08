@@ -5,7 +5,11 @@
   import InstallHint from './InstallHint.svelte';
   import LineMini from './LineMini.svelte';
 
-  let { onBack, onChanged }: { onBack: () => void; onChanged: () => void } = $props();
+  let { onBack, onChanged, onView }: {
+    onBack: () => void;
+    onChanged: () => void;
+    onView: (entry: Entry) => void;
+  } = $props();
 
   let entries = $state<Entry[]>([]);
   let openId = $state<string | null>(null);
@@ -93,7 +97,10 @@
               <span class="chip {answer.refined ? 'ref' : 'raw'}">{answer.item}</span>
             {/each}
           </div>
-          <button class="small quiet danger" onclick={() => onDelete(entry)}>Delete entry</button>
+          <div class="actions tight">
+            <button class="small quiet" onclick={() => onView(entry)}>Turn it in 3D</button>
+            <button class="small quiet danger" onclick={() => onDelete(entry)}>Delete entry</button>
+          </div>
         </div>
       {/if}
     </div>
@@ -170,7 +177,6 @@
   }
 
   .danger {
-    margin-top: 16px;
     border-color: rgba(232, 184, 122, 0.3);
     color: var(--mid);
   }
