@@ -17,6 +17,12 @@ export interface Question {
 
 export interface Answer {
   q: string;
+  /**
+   * Which gate this was, so a record with questions left open still lines its
+   * answers up against the eight. Absent on records written before gates could
+   * be skipped, where the answers were always all eight in order.
+   */
+  gate?: number;
   /** Human-readable answer, e.g. "Deep" or "Calm / Heavy". */
   label: string;
   item: string;
@@ -54,4 +60,11 @@ export interface LinePoint {
 export interface FlightResult {
   answers: Answer[];
   line: LinePoint[];
+  /**
+   * Gates met, answered or not. What a flight earns is counted from this and
+   * never from `answers`: flying over a question you would rather not answer
+   * has to cost nothing, or the cheapest way to be paid is to answer anything
+   * at all — see `lib/progress/credits.ts`.
+   */
+  gates: number;
 }

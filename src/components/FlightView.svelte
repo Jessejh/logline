@@ -3,12 +3,16 @@
   import { Flight } from '../lib/game/flight';
   import type { FlightResult } from '../lib/game/types';
 
-  let { onComplete }: { onComplete: (result: FlightResult) => void } = $props();
+  let { onComplete, teach = false }: {
+    onComplete: (result: FlightResult) => void;
+    teach?: boolean;
+  } = $props();
 
   let canvas = $state<HTMLCanvasElement | null>(null);
   let question = $state<string | null>(null);
   let hint = $state(false);
   let everHeld = $state(false);
+  let tip = $state<string | null>(null);
 
   $effect(() => {
     const el = canvas;
@@ -16,9 +20,11 @@
     let hintTimer = 0;
     // The handlers read state; without untrack the first touch would rebuild
     // the flight mid-hold.
+    const teaching = untrack(() => teach);
     const flight = untrack(() => new Flight(el, {
       onQuestion: (text) => (question = text),
       onComplete,
+      onTip: (text) => (tip = text),
       onHold: (held) => {
         clearTimeout(hintTimer);
         if (held) {
@@ -29,7 +35,7 @@
           hintTimer = window.setTimeout(() => (hint = true), everHeld ? 2200 : 400);
         }
       }
-    }));
+    }, { teach: teaching }));
     untrack(() => flight.start());
     return () => {
       clearTimeout(hintTimer);
@@ -43,8 +49,10 @@
      at either edge can't sit on top of the text. -->
 <div class="hud">
   <div class="question" class:on={question !== null}>{question ?? ''}</div>
-  <div class="hint" class:on={hint}>
-    {#if everHeld}
+  <div class="hint" class:on={tip !== null || (hint && !teach)}>
+    {#if tip !== null}
+      {tip}
+    {:else if everHeld}
       Hold to fly on
     {:else}
       Hold anywhere to fly · let go to think
@@ -99,8 +107,10 @@
     left: 0;
     right: 0;
     bottom: calc(env(safe-area-inset-bottom) + 36px);
+    padding: 0 26px;
     text-align: center;
     font-size: 16px;
+    line-height: 1.45;
     letter-spacing: 0.02em;
     color: var(--dim);
     opacity: 0;

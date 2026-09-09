@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { QUESTIONS } from '../lib/game/questions';
   import type { Entry } from '../lib/storage/entries';
   import type { Award } from '../lib/storage/profile';
   import LineMini from './LineMini.svelte';
@@ -16,15 +17,30 @@
 
   const raw = $derived(entry.answers.filter((a) => !a.refined).length);
   const refined = $derived(entry.answers.length - raw);
+
+  // Every question the flight met, answered or not. A question flown over is
+  // part of the record — dropping it from the list would make the day look
+  // like it was never asked, and leaving one open is a thing worth being able
+  // to look back on.
+  const rows = $derived(
+    QUESTIONS.map((question) => ({
+      q: question.q,
+      answer: entry.answers.find((a) => a.q === question.q) ?? null
+    })).filter((row) => row.answer !== null || entry.answers.length > 0)
+  );
 </script>
 
 <div class="veil top">
   <h2>Today's logline</h2>
 
-  {#each entry.answers as answer (answer.q)}
+  {#each rows as row (row.q)}
     <div class="row">
-      <span class="q">{answer.q}</span>
-      <span class="a" class:edge={answer.edge}>{answer.label}</span>
+      <span class="q">{row.q}</span>
+      {#if row.answer}
+        <span class="a" class:edge={row.answer.edge}>{row.answer.label}</span>
+      {:else}
+        <span class="a open">left open</span>
+      {/if}
     </div>
   {/each}
 
@@ -91,6 +107,11 @@
 
   .haul {
     margin-top: 20px;
+  }
+
+  .a.open {
+    color: var(--dim);
+    font-style: italic;
   }
 
   .warn {

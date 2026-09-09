@@ -59,7 +59,31 @@ gate is passed the craft glides out on its own.
    never quantity. This is load-bearing: if edges paid more, players
    would learn to answer for points, and the journal data rots.
 
-   Each gate passed drops one named material, shown in a popup.
+   **A gate can be flown over.** The craft is held to the frame on the
+   sides and the floor, but can be steered above the top edge, and a
+   gate met that way is recorded as left open rather than answered.
+   The summary lists it, in italics, among the eight — a question you
+   chose not to answer is part of the day, and dropping it from the
+   list would make it look as though it was never asked.
+
+   This exists because the alternative to it is worse. Fenced inside
+   the grid, every gate had to be answered through one of its
+   openings, so on the day a question is one you would rather not
+   face the only moves left are to lie or to stop flying. The first
+   corrupts the record and the second ends the habit. Going over the
+   top is the third move, and it has to cost nothing at all: a skip
+   that was cheaper to avoid than to take would just be a slower way
+   of demanding an answer. So a gate met pays whether or not it was
+   answered — see `lib/progress/credits.ts`, which is where that is
+   actually enforced.
+
+   Only over the top, never round the sides. One route means a skip
+   is always a decision with a direction, rather than something that
+   can happen by dragging too hard while aiming for an edge cell. The
+   reticle says so before it happens: off the grid it opens into a
+   dashed ring and names itself.
+
+   Each gate answered drops one named material, shown in a popup.
 
    The logged line draws behind you as you fly. The projected line
    points ahead and lights the cell it will land in. A rear-view
@@ -364,6 +388,26 @@ carries its steering constants unchanged. Treat those constants as
 starting tuning, not final — but change them in `src/`, not in the
 prototype.
 
+### The first flight
+
+Four lines, told in the world rather than over it, and only on a
+flight with nothing in the journal behind it: press and hold to fly,
+let go to stop and think, answer truthfully, and then the one that
+needs more than a line.
+
+The last is a scripted beat. As the fifth gate comes up the world
+stops for four seconds, the view closes in, and an arrow is drawn
+from inside the grid, over the top edge and away — the way past a
+question, shown rather than described — while the text says you can
+skip difficult questions by flying over them. It is worth stopping
+the game for because someone who does not know that gate can be flown
+over will answer it anyway on the day they least want to, and that
+answer is the one the journal can least afford.
+
+Every part of the curve after the rise stays above the frame. An arc
+that dipped back inside would draw the opposite of what it is there
+to say.
+
 ### Divergences from the prototype
 
 The port has moved past the prototype in these ways. Each is a
@@ -427,6 +471,10 @@ deliberate change, not drift:
   a locked camera swings the whole gate off the side of a phone at
   full deflection — and reading the options you are choosing between
   is the point of that screen.
+- **Gates can be flown over, and a first flight is taught.** Neither
+  exists in the prototype, where the craft was fenced inside the grid
+  and the player was left to work the controls out. See "A gate can
+  be flown over" and "The first flight" above.
 - **Steering is relative, not absolute.** The prototype set the
   craft's target straight to the touch point, so putting a thumb down
   anywhere but on the craft threw it across the screen — press near

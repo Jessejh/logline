@@ -2,16 +2,24 @@
  * What a flight is worth.
  *
  * One rule holds this file together: **the award is blind to the answers.**
- * It reads how many gates were passed and how many days in a row have been
+ * It reads how many gates were met and how many days in a row have been
  * logged. It never reads a cell index, an edge flag or a refined flag, and it
  * must stay that way — the moment an answer is worth more than its neighbour,
  * people answer for credits and the journal stops being a record of anything.
  * `docs/DESIGN.md` calls this the resource-farming risk; this is where it is
  * actually prevented.
  *
- * Because every gate yields regardless of which opening you take, and every
- * flight has the same eight gates, a day's earnings are the same whatever kind
- * of day it was. A hard week pays exactly what a good week pays.
+ * **Met, not answered.** A gate flown over pays exactly what a gate flown
+ * through pays. This is not generosity, it is the same rule seen from the
+ * side: charge for leaving a question open and the cheapest way to be paid
+ * becomes answering something — anything — on the day the honest reply was "I
+ * would rather not say", which is precisely the day the journal can least
+ * afford a made-up one.
+ *
+ * Because every gate yields regardless of which opening you take, or whether
+ * you take one at all, and every flight has the same eight gates, a day's
+ * earnings are the same whatever kind of day it was. A hard week pays exactly
+ * what a good week pays.
  *
  * Pure functions over plain values: no storage, no DOM, no framework.
  */
@@ -38,7 +46,7 @@ export function rateFor(streak: number): number {
   return BASE_PER_GATE + bonus * STREAK_STEP;
 }
 
-/** What a flight of `gates` gates pays at this streak. */
+/** What a flight that met `gates` gates pays at this streak, answered or not. */
 export function awardFor(gates: number, streak: number): number {
   return Math.max(0, Math.floor(gates)) * rateFor(streak);
 }

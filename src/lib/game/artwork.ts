@@ -39,7 +39,8 @@ export class Artwork {
   private readonly cvs: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly points: Vec[];
-  private readonly answers: readonly Answer[];
+  /** Answer per gate, with a hole where a gate was flown over. */
+  private readonly byGate: (Answer | undefined)[];
   private readonly stars: { x: number; y: number; s: number; p: number }[] = [];
 
   private W = 0;
@@ -107,14 +108,22 @@ export class Artwork {
     if (!ctx) throw new Error('2d canvas context unavailable');
     this.cvs = canvas;
     this.ctx = ctx;
-    this.answers = input.answers;
     this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // Gate spacing in the record is SPACING world units; here it is GAP.
     const span = Math.max(1, gateZ(1) - gateZ(0));
     this.zScale = GAP / span;
-    const n = Math.max(1, Math.min(QUESTIONS.length, input.answers.length || QUESTIONS.length));
-    this.zMid = (gateZ(0) + gateZ(n - 1)) / 2;
+    this.zMid = (gateZ(0) + gateZ(QUESTIONS.length - 1)) / 2;
+
+    // A flight meets all eight gates whether or not it answers them, so every
+    // frame is threaded. Pairing by position in the answer list would slide the
+    // frames along by one for every question left open, and hang each answer on
+    // the wrong question.
+    this.byGate = new Array(QUESTIONS.length).fill(undefined);
+    input.answers.forEach((a, i) => {
+      const g = a.gate ?? i;
+      if (g >= 0 && g < this.byGate.length) this.byGate[g] = a;
+    });
 
     const line = input.line;
     const stride = Math.max(1, Math.ceil(line.length / MAX_POINTS));
@@ -244,10 +253,10 @@ export class Artwork {
 
   private collectFrames(items: Drawable[]): void {
     const { ctx } = this;
-    const n = Math.min(QUESTIONS.length, this.answers.length || QUESTIONS.length);
+    const n = QUESTIONS.length;
     for (let i = 0; i < n; i++) {
       const q = QUESTIONS[i];
-      const a = this.answers[i];
+      const a = this.byGate[i];
       const z = (gateZ(i) - this.zMid) * this.zScale;
       const corner = (nx: number, ny: number) =>
         this.project({ x: (nx - 0.5) * FRAME_W, y: (0.5 - ny) * FRAME_H, z });
