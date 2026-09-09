@@ -58,6 +58,11 @@ renamed or moved to a custom domain.
 to "GitHub Actions". Until that is done the workflow will fail at the
 deploy step.
 
+The front page carries the build minute as `mm.dd.hh.mm`, in the
+viewer's own timezone. Distribution is a URL behind a service worker,
+so that stamp is how you tell on the phone whether the deploy you just
+pushed is the one you are looking at.
+
 ## Stack
 
 Vite + TypeScript, Svelte for the screens outside the flight, no

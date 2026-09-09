@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { buildVersion } from '../lib/version';
+
   let { onBegin, onJournal, onCollection, entryCount, credits }: {
     onBegin: () => void;
     onJournal: () => void;
@@ -6,6 +8,8 @@
     entryCount: number;
     credits: number;
   } = $props();
+
+  const version = buildVersion();
 </script>
 
 <div class="veil">
@@ -20,6 +24,8 @@
     Each frame ahead is one question. <b>Pass through the opening you mean.</b> Every cell gives you material
     — edges aren't worth more, they're just different.
   </p>
+  <p class="build">{version}</p>
+
   <div class="actions">
     <button onclick={onBegin}>Begin</button>
     {#if entryCount > 0}
@@ -32,3 +38,16 @@
     {/if}
   </div>
 </div>
+
+<style>
+  /* A build stamp, not a headline: legible if you look for it, invisible if
+     you don't. */
+  .build {
+    margin-top: 20px;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: var(--dim);
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
