@@ -8,8 +8,12 @@ and why. Don't re-propose rejected ideas.
 - Mobile-only. Single-thumb portrait. No desktop layout.
 - Grading phase is never scored. Nothing a player earns may depend
   on which answer they pick — not credits, not items, not anything
-  added later. Credits are paid per gate passed and per day streak,
+  added later. Credits are paid per gate **met** and per day streak,
   and the award function is deliberately never given the answers.
+- A question can be left open by flying over the gate, and doing so
+  pays exactly what answering pays. Charge for a skip and the
+  cheapest way to be paid becomes answering something on the day the
+  honest reply was "I would rather not say".
 - Upgrades are appearance only. Nothing is scored, so nothing may
   buy an advantage.
 - Grid answer options use even counts (4, not 3 or 5). No neutral
@@ -37,6 +41,15 @@ Stars only. Could be falling or gliding. 3D feel comes from roll
 (x-velocity) and pitch (y-velocity) deforming a diamond shape.
 
 ## Current state
+
+A question can be flown over: the craft can be steered above the top
+edge of a gate, and a gate met that way is recorded as left open
+rather than answered. `Answer` carries its `gate` index so a sparse
+record still lines up against the eight questions, and `FlightResult`
+carries `gates` — what the flight is paid for. The first flight runs
+a short tutorial (`teach` on `FlightView`), ending in a scripted beat
+where the world stops for four seconds, the view closes in, and an
+arrow is drawn over a gate.
 
 The grading phase runs as an installable web app in `src/`. It began
 as a faithful port of the prototype and the steering constants in

@@ -65,8 +65,9 @@
     } catch {
       saveError = 'This entry could not be saved on this device. It is still shown below.';
     }
-    // Paid per gate passed, never per answer chosen — see lib/progress/credits.ts.
-    award = await awardFlight(result.answers.length, record.ts);
+    // Paid per gate met, never per answer chosen and never per answer given —
+    // flying over a question has to cost nothing. See lib/progress/credits.ts.
+    award = await awardFlight(result.gates, record.ts);
     await refreshCredits();
     entry = record;
     artworkReturn = 'summary';
@@ -107,7 +108,7 @@
     onCollection={() => (view = 'collection')}
   />
 {:else if view === 'flight'}
-  <FlightView onComplete={onFlightComplete} />
+  <FlightView onComplete={onFlightComplete} teach={entryCount === 0} />
 {:else if view === 'artwork' && entry}
   <Artwork
     entry={entry}

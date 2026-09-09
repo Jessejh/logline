@@ -22,7 +22,8 @@
   <p class="howto">
     Hold your thumb anywhere to fly, drag to steer. Lift it and the craft waits while you think.<br /><br />
     Each frame ahead is one question. <b>Pass through the opening you mean.</b> Every cell gives you material
-    — edges aren't worth more, they're just different.
+    — edges aren't worth more, they're just different.<br /><br />
+    A question you would rather not answer today can be flown over. It costs nothing.
   </p>
   <p class="build">{version}</p>
 

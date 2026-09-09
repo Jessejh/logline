@@ -1,3 +1,4 @@
+import { QUESTIONS } from './questions';
 import { findPauses, lateralSpeeds, type FlightStats } from './stats';
 import type { Answer, LinePoint } from './types';
 import { visibleHeight, visibleWidth } from '../viewport';
@@ -309,8 +310,12 @@ export class Piece {
 
     for (let i = 0; i < n; i++) {
       const a = answers[i];
-      // Answers land in gate order, so the record divides evenly between them.
-      const idx = Math.min(line.length - 1, Math.round(((i + 1) / n) * (line.length - 1)));
+      // Gates are evenly spaced along the record, so an answer's own gate says
+      // where in the flight it was given. Dividing the record by the number of
+      // answers instead would drag every bloom forward on a flight that left
+      // questions open.
+      const share = ((a.gate ?? i) + 1) / QUESTIONS.length;
+      const idx = Math.min(line.length - 1, Math.round(share * (line.length - 1)));
       const p = line[idx];
 
       // Clockwise from the top, so the ring reads in the order they were asked.

@@ -82,6 +82,23 @@ const CAM_FOLLOW = 0.66;
  */
 const CAM_LAG = 4.6;
 
+/**
+ * How far above the gate's top edge the craft may be steered, as a fraction of
+ * the frame.
+ *
+ * The craft used to be fenced inside the grid, which quietly made answering
+ * compulsory: every gate had to be met through one of its openings. Some days a
+ * question is one you would rather not answer, and the honest options then are
+ * to lie or to stop flying. Going over the top is the third one.
+ *
+ * Only over the top. The sides and the floor still hold the craft exactly at
+ * the frame, so the one way past a gate is the one the tutorial draws — and a
+ * hard drag in any other direction presses against the edge as it always did,
+ * rather than quietly leaving a question unanswered. A skip has to be a
+ * decision, and a decision has a direction.
+ */
+const OVER_UP = 0.34;
+
 /** World distance of gate `i` from the start of the flight. */
 export function gateZ(i: number): number {
   return FIRST_GATE + i * SPACING;
@@ -89,10 +106,15 @@ export function gateZ(i: number): number {
 
 interface Gate {
   q: Question;
+  /** Which of the eight this is. */
+  n: number;
   /** Fixed world position; `dist` is recomputed from it every frame. */
   z: number;
   dist: number;
+  /** Met, one way or the other. */
   done: boolean;
+  /** Met by going round it rather than through it. */
+  skipped: boolean;
   pick: { ix: number; iy: number } | null;
   flash: number;
 }
@@ -110,6 +132,8 @@ interface Pop {
   y: number;
   t: number;
   edge: boolean;
+  /** A gate left open says so plainly, without the flourish of a find. */
+  quiet: boolean;
 }
 
 interface Spark {
@@ -136,11 +160,20 @@ interface Aim {
   /** Screen position the craft will hold when it reaches the gate. */
   x: number;
   y: number;
+  /** Whether that spot goes through the gate rather than past it. */
+  inside: boolean;
   ix: number;
   iy: number;
   /** The simulated path from here to there, with depth ahead of the craft. */
   path: { x: number; y: number; d: number }[];
 }
+
+/** The gate the skip is taught at: far enough in to have the hang of flying. */
+const TEACH_AT_GATE = 4;
+/** Seconds the world holds still while the way over that gate is shown. */
+const BEAT_SECONDS = 4;
+/** How far the view closes in on the arrow during the beat. */
+const BEAT_ZOOM = 1.5;
 
 export interface FlightHandlers {
   /** Called when the visible prompt changes; null hides it. */
@@ -149,6 +182,13 @@ export interface FlightHandlers {
   onComplete(result: FlightResult): void;
   /** Called when the thumb goes down or lifts. The craft only moves while held. */
   onHold?(held: boolean): void;
+  /** A line of teaching on a first flight, or null to clear it. */
+  onTip?(text: string | null): void;
+}
+
+export interface FlightOptions {
+  /** Run the first-flight tutorial. */
+  teach?: boolean;
 }
 
 export class Flight {
@@ -204,7 +244,23 @@ export class Flight {
   private sparks: Spark[] = [];
   private bursts: Burst[] = [];
   private answers: Answer[] = [];
-  private aim: Aim = { gate: null, x: 0, y: 0, ix: 0, iy: 0, path: [] };
+  /** Gates met, answered or skipped. What ends the flight, and what it pays. */
+  private met = 0;
+
+  private readonly teach: boolean;
+  private tip: string | null = null;
+  private tipUntil = 0;
+  private flown = 0;
+  private taught = { fly: false, stop: false, truth: false, skip: false };
+  /**
+   * The one scripted moment: the world stops, the view closes in on an arrow
+   * drawn over a gate, and the way past a question you would rather not answer
+   * is shown rather than described.
+   */
+  private beat = { running: false, t: 0, gate: null as Gate | null };
+  private zoom = 1;
+  private focus = { x: 0, y: 0 };
+  private aim: Aim = { gate: null, x: 0, y: 0, inside: true, ix: 0, iy: 0, path: [] };
 
   private zDist = 0;
   private time = 0;
@@ -256,12 +312,13 @@ export class Flight {
     this.setHeld(false);
   };
 
-  constructor(canvas: HTMLCanvasElement, handlers: FlightHandlers) {
+  constructor(canvas: HTMLCanvasElement, handlers: FlightHandlers, options: FlightOptions = {}) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2d canvas context unavailable');
     this.cvs = canvas;
     this.ctx = ctx;
     this.handlers = handlers;
+    this.teach = options.teach ?? false;
     this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
@@ -279,6 +336,7 @@ export class Flight {
     this.running = true;
     this.last = performance.now();
     this.handlers.onHold?.(false);
+    if (this.teach) this.say('Press and hold to fly', 60);
     this.raf = requestAnimationFrame(this.loop);
   }
 
@@ -317,10 +375,9 @@ export class Flight {
     this.lastPy = e.clientY;
     const rawX = this.grabTx + (e.clientX - this.grabX) * STEER_GAIN;
     const rawY = this.grabTy + (e.clientY - this.grabY) * STEER_GAIN;
-    const mx = this.GW / 2 - 10;
-    const my = this.GH / 2 - 10;
+    const { mx, up, down } = this.reach();
     const x = Math.max(this.CX - mx, Math.min(this.CX + mx, rawX));
-    const y = Math.max(this.CY - my, Math.min(this.CY + my, rawY));
+    const y = Math.max(this.CY - up, Math.min(this.CY + down, rawY));
 
     // Drag past an edge and the overshoot is folded back into the anchor, so
     // the craft picks the thumb up again the instant it turns around instead
@@ -395,11 +452,20 @@ export class Flight {
     this.time = 0;
     this.finished = false;
     this.shownQuestion = null;
+    this.met = 0;
+    this.tip = null;
+    this.tipUntil = 0;
+    this.flown = 0;
+    this.taught = { fly: false, stop: false, truth: false, skip: false };
+    this.beat = { running: false, t: 0, gate: null };
+    this.zoom = 1;
     this.gates = QUESTIONS.map((q, i) => ({
       q,
+      n: i,
       z: gateZ(i),
       dist: gateZ(i),
       done: false,
+      skipped: false,
       pick: null,
       flash: 0
     }));
@@ -415,11 +481,25 @@ export class Flight {
     }
   }
 
+  /** How far from the middle of the frame the craft may be steered, per edge. */
+  private reach(): { mx: number; up: number; down: number } {
+    return {
+      mx: this.GW * 0.5,
+      up: this.GH * (0.5 + OVER_UP),
+      down: this.GH * 0.5
+    };
+  }
+
   private clampPlane(): void {
-    const mx = this.GW / 2 - 10;
-    const my = this.GH / 2 - 10;
+    const { mx, up, down } = this.reach();
     this.plane.tx = Math.max(this.CX - mx, Math.min(this.CX + mx, this.plane.tx));
-    this.plane.ty = Math.max(this.CY - my, Math.min(this.CY + my, this.plane.ty));
+    this.plane.ty = Math.max(this.CY - up, Math.min(this.CY + down, this.plane.ty));
+  }
+
+  /** Whether a craft at this spot would go through the gate rather than round it. */
+  private insideGate(x: number, y: number): boolean {
+    const { nx, ny } = this.toNorm(x, y);
+    return nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1;
   }
 
   /* ── the gate frame, in both directions ── */
@@ -500,9 +580,13 @@ export class Flight {
 
     // Forward motion is the thumb: down to fly, up to hover and think. Once
     // the last answer is in, the craft glides out on its own.
-    const auto = this.answers.length === QUESTIONS.length;
-    const want = this.held || auto ? 1 : 0;
-    p.throttle += (want - p.throttle) * (want > p.throttle ? 4.5 : 3.4) * dt;
+    const auto = this.met === QUESTIONS.length;
+    // Nothing moves while the way over a gate is being shown, but the craft
+    // still settles rather than stopping dead.
+    const held = this.beat.running ? false : this.held;
+    const want = held || (auto && !this.beat.running) ? 1 : 0;
+    const rate = this.beat.running ? 9 : want > p.throttle ? 4.5 : 3.4;
+    p.throttle += (want - p.throttle) * rate * dt;
     if (Math.abs(want - p.throttle) < 0.004) p.throttle = want;
     const speed = SPEED * p.throttle;
 
@@ -559,7 +643,7 @@ export class Flight {
       const prev = g.dist;
       g.dist = g.z - this.zDist;
       if (g.flash > 0) g.flash -= dt * 1.7;
-      if (!g.done && prev > pass && g.dist <= pass) this.capture(g);
+      if (!g.done && prev > pass && g.dist <= pass) this.resolve(g);
     }
     this.gates = this.gates.filter((g) => g.dist > -KEEP_BEHIND);
 
@@ -579,15 +663,152 @@ export class Flight {
     this.bursts = this.bursts.filter((b) => b.t < BURST_LIFE);
 
     this.updateAim();
+    this.teachTick(dt);
+    this.zoom = this.beatZoom();
 
     const lastGate = this.gates[this.gates.length - 1];
     if (!this.finished && auto && (!lastGate || lastGate.dist < GONE_AT)) {
       this.finished = true;
       this.setHeld(false);
       this.setQuestion(null);
-      const result: FlightResult = { answers: this.answers.slice(), line: this.loggedLine.slice() };
+      const result: FlightResult = {
+        answers: this.answers.slice(),
+        line: this.loggedLine.slice(),
+        gates: this.met
+      };
       setTimeout(() => this.handlers.onComplete(result), 700);
     }
+  }
+
+  private say(text: string | null, seconds = 3.2): void {
+    if (text === this.tip) return;
+    this.tip = text;
+    this.tipUntil = text ? this.time + seconds : 0;
+    this.handlers.onTip?.(text);
+  }
+
+  /**
+   * The first flight, taught in the order the hands need it: how to go, how to
+   * stop, what the questions are for, and then the way past one you would
+   * rather not answer.
+   *
+   * Told in the world rather than over it. The last of the four is the reason
+   * for the whole thing — someone who does not know they can fly over a gate
+   * will answer it anyway on the day they least want to, and that answer is
+   * the one the journal can least afford.
+   */
+  private teachTick(dt: number): void {
+    if (!this.teach) return;
+    if (this.tip && this.time > this.tipUntil) this.say(null);
+    if (this.held) this.flown += dt;
+
+    if (this.beat.running) {
+      this.beat.t += dt;
+      if (!this.taught.skip && this.beat.t > 1.1) {
+        this.taught.skip = true;
+        this.say('You can skip difficult questions by flying over them', 4.2);
+      }
+      if (this.beat.t > BEAT_SECONDS) {
+        this.beat.running = false;
+        this.beat.gate = null;
+      }
+      return;
+    }
+
+    if (!this.taught.fly) {
+      if (this.held) {
+        this.taught.fly = true;
+        this.say(null);
+      }
+      return;
+    }
+
+    // The scripted beat is the one line that cannot wait its turn: its gate is
+    // arriving whether or not something else is still on screen.
+    const teachGate = this.gates.find((g) => g.n === TEACH_AT_GATE && !g.done);
+    if (!this.taught.skip && this.taught.stop && teachGate && teachGate.dist < 10.5) {
+      this.beat = { running: true, t: 0, gate: teachGate };
+      this.say(null);
+      return;
+    }
+
+    // Everything else waits for the last line to have had its moment. Two of
+    // these landing within a third of a second of each other reads as a glitch,
+    // not as teaching.
+    if (this.tip !== null) return;
+
+    if (!this.taught.stop && this.flown > 1.6) {
+      this.taught.stop = true;
+      this.say('Let go to stop and think', 2.6);
+      return;
+    }
+
+    const first = this.gates.find((g) => !g.done);
+    if (!this.taught.truth && this.taught.stop && first && first.n === 0 && first.dist < 9) {
+      this.taught.truth = true;
+      this.say('Answer truthfully', 3);
+    }
+  }
+
+  /** How far the view has closed in, and on what. */
+  private beatZoom(): number {
+    if (!this.beat.running || this.reduced) return 1;
+    const t = this.beat.t;
+    const inT = 0.9;
+    const outAt = BEAT_SECONDS - 1.1;
+    const k =
+      t < inT
+        ? t / inT
+        : t < outAt
+          ? 1
+          : Math.max(0, 1 - (t - outAt) / (BEAT_SECONDS - outAt));
+    const eased = k * k * (3 - 2 * k);
+    return 1 + (BEAT_ZOOM - 1) * eased;
+  }
+
+  /**
+   * The way over a gate, drawn on the gate's own plane: up from in front of it,
+   * over the top edge, and down the far side.
+   */
+  private drawWayOver(g: Gate): void {
+    const { ctx } = this;
+    const s = this.proj(Math.max(0, g.dist));
+    const w = this.GW;
+    const h = this.GH;
+    const pt = (ox: number, oy: number) => this.view(this.CX + ox * w, this.CY + oy * h, s);
+
+    // Out of the grid, over the top edge, and away — every part of the curve
+    // after the rise stays above the frame. An arc that dipped back inside
+    // would be drawing the opposite of what it is there to say.
+    const a = pt(-0.26, 0.02);
+    const ctrl1 = pt(-0.46, -0.9);
+    const ctrl2 = pt(0.26, -1.12);
+    const end = pt(0.46, -0.66);
+    this.focus = pt(0, -0.8);
+
+    const fade = Math.min(1, this.beat.t / 0.5) * Math.min(1, (BEAT_SECONDS - this.beat.t) / 0.6);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, fade);
+    ctx.strokeStyle = PALETTE.lamp;
+    ctx.lineWidth = Math.max(1.5, 3 * s);
+    ctx.lineCap = 'round';
+    ctx.shadowColor = withAlpha(PALETTE.lamp, 0.8);
+    ctx.shadowBlur = 16 * s;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.bezierCurveTo(ctrl1.x, ctrl1.y, ctrl2.x, ctrl2.y, end.x, end.y);
+    ctx.stroke();
+
+    // Head, pointing the way the curve is going as it comes down the far side.
+    const head = Math.atan2(end.y - ctrl2.y, end.x - ctrl2.x);
+    const hl = Math.max(8, 15 * s);
+    ctx.beginPath();
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(end.x - Math.cos(head - 0.42) * hl, end.y - Math.sin(head - 0.42) * hl);
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(end.x - Math.cos(head + 0.42) * hl, end.y - Math.sin(head + 0.42) * hl);
+    ctx.stroke();
+    ctx.restore();
   }
 
   /**
@@ -643,12 +864,36 @@ export class Flight {
     if (horizon > simT) path.push({ x, y, d: horizon * SPEED });
 
     const cell = gate ? this.cellAt(gate, x, y) : { ix: 0, iy: 0 };
-    this.aim = { gate, x, y, ix: cell.ix, iy: cell.iy, path };
+    this.aim = { gate, x, y, inside: this.insideGate(x, y), ix: cell.ix, iy: cell.iy, path };
+  }
+
+  /**
+   * A gate has arrived. Going through it answers it; going round it leaves the
+   * question open, which is a real answer to have given and costs nothing —
+   * the flight still met the gate, and the flight is paid by gates met.
+   */
+  private resolve(g: Gate): void {
+    g.done = true;
+    this.met++;
+    if (!this.insideGate(this.plane.x, this.plane.y)) {
+      g.skipped = true;
+      g.flash = 1;
+      this.pops.push({
+        text: 'left open',
+        x: this.plane.x,
+        y: this.plane.y - 68,
+        t: 0,
+        edge: false,
+        quiet: true
+      });
+      navigator.vibrate?.(6);
+      return;
+    }
+    this.capture(g);
   }
 
   private capture(g: Gate): void {
     const { ix, iy } = this.cellAt(g, this.plane.x, this.plane.y);
-    g.done = true;
     g.pick = { ix, iy };
     g.flash = 1;
 
@@ -660,8 +905,15 @@ export class Flight {
         ? `${g.q.xAxis[ix < nx / 2 ? 0 : 1]} / ${g.q.yAxis[iy < g.q.rows.length / 2 ? 0 : 1]}`
         : g.q.cols[ix];
 
-    this.answers.push({ q: g.q.q, label, item: g.q.items[ix], edge, refined, ix, iy });
-    this.pops.push({ text: `+ ${g.q.items[ix]}`, x: this.plane.x, y: this.plane.y - 68, t: 0, edge });
+    this.answers.push({ q: g.q.q, gate: g.n, label, item: g.q.items[ix], edge, refined, ix, iy });
+    this.pops.push({
+      text: `+ ${g.q.items[ix]}`,
+      x: this.plane.x,
+      y: this.plane.y - 68,
+      t: 0,
+      edge,
+      quiet: false
+    });
 
     // Shards of the wall, thrown wider across it than along the flight path.
     for (let i = 0; i < 26; i++) {
@@ -708,6 +960,17 @@ export class Flight {
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
+    // The beat closes the view in on the arrow. Wrapping the world in one
+    // transform is the only honest way to do it — zooming each drawing by hand
+    // would leave the gate's cells, labels and reticle disagreeing about how
+    // big the scene is.
+    ctx.save();
+    if (this.zoom !== 1) {
+      ctx.translate(this.focus.x, this.focus.y);
+      ctx.scale(this.zoom, this.zoom);
+      ctx.translate(-this.focus.x, -this.focus.y);
+    }
+
     for (const s of this.stars) {
       const k = this.proj(s.d);
       if (k <= 0) continue;
@@ -740,10 +1003,14 @@ export class Flight {
 
     this.drawCraft();
 
+    // After the craft: it is an instruction, and the thing it is pointing over
+    // is exactly where the craft is sitting.
+    if (this.beat.running && this.beat.gate) this.drawWayOver(this.beat.gate);
+
     for (const pop of this.pops) {
       const k = pop.t / 2.3;
       ctx.globalAlpha = k < 0.12 ? k / 0.12 : Math.max(0, (1 - k) * 1.5);
-      ctx.fillStyle = pop.edge ? PALETTE.lamp : '#bfe0e2';
+      ctx.fillStyle = pop.quiet ? PALETTE.label : pop.edge ? PALETTE.lamp : '#bfe0e2';
       ctx.font = `500 16px ${this.fontFamily}`;
       ctx.textAlign = 'center';
       const v = this.view(pop.x, pop.y, 1);
@@ -751,6 +1018,7 @@ export class Flight {
     }
     ctx.globalAlpha = 1;
 
+    ctx.restore();
     this.drawMirror();
 
     const next = this.gates.filter((g) => !g.done).sort((a, b) => a.dist - b.dist)[0];
@@ -847,6 +1115,28 @@ export class Flight {
       const r = 4 + 10 * s;
       const pulse = 0.75 + 0.25 * Math.sin(this.time * 5);
       ctx.globalAlpha = (0.35 + 0.5 * s) * pulse;
+      ctx.strokeStyle = this.aim.inside ? PALETTE.trailHot : PALETTE.label;
+      // Off the grid the corners open out into a ring: the same mark saying
+      // the gate is going past rather than being answered.
+      if (!this.aim.inside) {
+        ctx.lineWidth = Math.max(0.8, 1.4 * s);
+        ctx.setLineDash([4 * s + 1, 5 * s + 1]);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Named, because leaving a question open is a decision and should never
+        // arrive as a surprise on the summary screen.
+        if (s > 0.3) {
+          ctx.globalAlpha = Math.min(1, (s - 0.3) * 3) * 0.8;
+          ctx.fillStyle = PALETTE.label;
+          ctx.textAlign = 'center';
+          ctx.font = `500 ${Math.min(15, Math.max(10, 15 * s))}px ${this.fontFamily}`;
+          ctx.fillText('leaving this one open', x, y - r - 8);
+        }
+        ctx.globalAlpha = 1;
+        return;
+      }
       ctx.strokeStyle = PALETTE.trailHot;
       ctx.lineWidth = Math.max(0.8, 1.4 * s);
       ctx.beginPath();
@@ -989,7 +1279,7 @@ export class Flight {
 
     // The cell the current heading lands in. Same colour at every position —
     // it says "here", never "better".
-    if (aimed && !g.done) {
+    if (aimed && !g.done && this.aim.inside) {
       const ax = x0 + this.aim.ix * cw;
       const ay = y0 + this.aim.iy * ch;
       ctx.fillStyle = withAlpha(PALETTE.ice, 0.08 + 0.1 * near + 0.04 * pulse);
@@ -1003,7 +1293,9 @@ export class Flight {
     // strung across the whole frame, identical in every cell so the wall
     // never says one answer is worth more than another. Passing through
     // dissolves it: `flash` runs 1 to 0 over the punch.
-    const wall = g.done ? Math.max(0, g.flash) : 1;
+    // A gate that was answered has a hole punched in it and dissolves; one that
+    // was flown over goes past whole, which is the whole of what happened.
+    const wall = g.done && !g.skipped ? Math.max(0, g.flash) : 1;
     if (wall > 0.01 && h > 2) {
       ctx.save();
       ctx.beginPath();
@@ -1032,7 +1324,7 @@ export class Flight {
 
       // Where the current heading will touch the wall, lighting up as it
       // closes. Same colour wherever it lands.
-      if (aimed && !g.done && g.dist < 7) {
+      if (aimed && !g.done && this.aim.inside && g.dist < 7) {
         const t = Math.max(0, 1 - g.dist / 7);
         const { x: bx, y: by } = this.view(this.aim.x, this.aim.y, s);
         const r = Math.max(8, (18 + 60 * t) * s);
@@ -1081,7 +1373,7 @@ export class Flight {
         if (widest > cw - 6) fs *= (cw - 6) / widest;
 
         for (let i = 0; i < nx; i++) {
-          const hit = aimed && !g.done && this.aim.ix === i;
+          const hit = aimed && !g.done && this.aim.inside && this.aim.ix === i;
           ctx.fillStyle = hit ? '#e6f2f2' : PALETTE.label;
           ctx.font = `${hit ? 600 : 500} ${hit ? fs * 1.12 : fs}px ${this.fontFamily}`;
           ctx.fillText(g.q.cols[i], x0 + i * cw + cw / 2, y0 + h - 14 * s - 4);
@@ -1097,7 +1389,7 @@ export class Flight {
         ctx.fillText(g.q.xAxis[1], x0 + w + 7, centre.y + fs * 0.36);
 
         // Name the aimed cell so a 2D answer reads as an answer, not a spot.
-        if (aimed && !g.done && s > 0.45) {
+        if (aimed && !g.done && this.aim.inside && s > 0.45) {
           const rows = g.q.rows?.length ?? 1;
           const text = `${g.q.xAxis[this.aim.ix < nx / 2 ? 0 : 1]} · ${g.q.yAxis[this.aim.iy < rows / 2 ? 0 : 1]}`;
           const cfs = Math.min(15, Math.max(10, cw * 0.185));
