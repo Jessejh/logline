@@ -24,6 +24,12 @@ import type { LinePoint } from './types';
  * flying, so this is roughly fifteen frames of nothing.
  */
 const PAUSE_MIN = 0.25;
+/**
+ * Forward units a second at full throttle, from the flight's own `SPEED`. Not
+ * imported: `lib/game/stats.ts` reads records, and records outlive whatever the
+ * engine is tuned to on the day they are read back.
+ */
+const FLYING_SPEED = 3.45;
 
 export interface FlightStats {
   /** Distance travelled inside the gate frame, in frame widths. */
@@ -81,14 +87,25 @@ export interface Pause {
   seconds: number;
 }
 
+/**
+ * A pause is time passing with no ground covered — a large gap in `t` across a
+ * tiny gap in `z`, as the design has it. Measuring the time gap alone does not
+ * say that, because a stored record is thinned to a fixed number of points:
+ * the longer the flight, the further apart in time two neighbouring points sit,
+ * whether or not the craft ever stopped. On a long, thoughtful flight that put
+ * every gap over the threshold and reported a pause at every point.
+ *
+ * So the flying time the distance covered would have taken is subtracted out,
+ * and what is left over is the stopped time.
+ */
 export function findPauses(line: readonly LinePoint[]): Pause[] {
   const out: Pause[] = [];
   for (let i = 1; i < line.length; i++) {
     const a = line[i - 1];
     const b = line[i];
     if (a.t === undefined || b.t === undefined) continue;
-    const gap = b.t - a.t;
-    if (gap > PAUSE_MIN) out.push({ index: i - 1, nx: a.nx, ny: a.ny, seconds: gap });
+    const held = b.t - a.t - Math.max(0, b.z - a.z) / FLYING_SPEED;
+    if (held > PAUSE_MIN) out.push({ index: i - 1, nx: a.nx, ny: a.ny, seconds: held });
   }
   return out;
 }

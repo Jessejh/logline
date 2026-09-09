@@ -38,17 +38,28 @@ export interface PieceInput {
 
 /**
  * One hue per column of a gate, deliberately equal in weight — see the note
- * above. Roughly matched in lightness and chroma so that no answer is a
- * prettier answer.
+ * above. These four are solved rather than picked: same hue angles as before,
+ * but every one placed at L* 68 and C* 50 in Lab, the sharpest chroma all four
+ * can reach in sRGB while staying identical in weight. Matched to two decimal
+ * places, so no answer is a prettier answer — which the old hand-picked set,
+ * spanning L* 66 to 74, only approximated.
  */
-const HUES = ['#4fb3ad', '#8f9ee0', '#dcae6b', '#d98a9c'];
+const HUES = ['#00bc95', '#14affe', '#cd9e4b', '#f281b7'];
+
+/**
+ * The two paints that separate out of a fast throw. Deliberately *not* the
+ * answer hues: the ground says what you answered and the mark says how you
+ * moved, and a mark wearing an answer's colour blurs the two.
+ */
+const PAINTS = ['#123f6e', '#a33a2b'];
 
 /** Paper at rest, and paper on a day that kept stopping. */
-const COOL_GROUND = '#dfe2e4';
-const WARM_GROUND = '#e9e1d2';
+const COOL_GROUND = '#e8ecef';
+const WARM_GROUND = '#f4ecdd';
 
 /** Ink. Never pure black — it sits on paper, not on a screen. */
 const INK = '20, 26, 34';
+const INK_RGB = [20, 26, 34] as const;
 
 /** Frame widths of travel that count as a full day of moving. */
 const BUSY_FULL = 6;
@@ -77,6 +88,45 @@ function rgbaFromHex(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
+/** Ink lifted toward a paint, for a throw that left the bucket fast. */
+function inkToward(hex: string, t: number): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  const k = clamp01(t);
+  return [
+    Math.round(INK_RGB[0] * (1 - k) + ((n >> 16) & 255) * k),
+    Math.round(INK_RGB[1] * (1 - k) + ((n >> 8) & 255) * k),
+    Math.round(INK_RGB[2] * (1 - k) + (n & 255) * k)
+  ];
+}
+
+/**
+ * Deterministic jitter. A record has to draw the same picture every time it is
+ * opened — it is the journal entry, not a screensaver — so nothing here may
+ * reach for `Math.random`.
+ */
+function noise(i: number, salt: number): number {
+  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/** One flick of paint off the bucket. */
+interface Throw {
+  /** Where it sits on the record, so the reveal can walk past it. */
+  i: number;
+  x: number;
+  y: number;
+  /** Unit vector the paint leaves along, and the travel it inherits. */
+  dx: number;
+  dy: number;
+  tx: number;
+  ty: number;
+  len: number;
+  half: number;
+  speed: number;
+  paint: string;
+  drops: { at: number; r: number; off: number }[];
+}
+
 interface Bloom {
   x: number;
   y: number;
@@ -100,6 +150,8 @@ export class Piece {
   private fit = { k: 1, cx: 0.5, cy: 0.5 };
   private fontFamily = 'system-ui, sans-serif';
   private grain: HTMLCanvasElement | null = null;
+  /** Built once per layout: the geometry is fixed by the record. */
+  private throwsCache: Throw[] | null = null;
 
   /** 0..1 while the line draws itself in, then pinned at 1. */
   private reveal = 0;
@@ -181,6 +233,7 @@ export class Piece {
     };
     this.measureFit();
     this.grain = null;
+    this.throwsCache = null;
   }
 
   /**
@@ -250,7 +303,9 @@ export class Piece {
     const out: Bloom[] = [];
     const n = answers.length;
     const organic = clamp01(this.busy * 1.6);
-    const ringR = 0.29;
+    // Pushed out far enough that neighbouring petals sit beside each other
+    // rather than on top of each other.
+    const ringR = 0.34;
 
     for (let i = 0; i < n; i++) {
       const a = answers[i];
@@ -306,9 +361,9 @@ export class Piece {
     ctx.fillRect(0, 0, W, H);
 
     this.drawGround();
+    this.drawThrows();
     this.drawLine();
     this.drawPauses();
-    this.drawMarks();
     this.drawGrain();
     this.drawFrame();
     void stats;
@@ -323,9 +378,14 @@ export class Piece {
     // Pausing is what makes the colour come up. Never stopping leaves a piece
     // that is cooler and more graphic rather than a piece that is washed out —
     // the floor is high enough that colour is always properly present.
-    const chroma = 0.34 + 0.42 * this.stillness;
-    // A tight flight keeps its colour close; a wandering one spreads it.
-    const spread = this.box.w * (0.3 + 0.34 * this.busy);
+    const chroma = 0.36 + 0.34 * this.stillness;
+    // A wandering flight lays its blooms far apart and needs a wide field for
+    // them to meet at all. A calm one stacks them in the formal ring, where a
+    // field that wide simply multiplies eight hues through each other into a
+    // grey wash — the same mixing-to-mud failure the ring was introduced to
+    // solve, arriving by the other road. So the quiet end gets tighter, more
+    // separate petals, and reads as a deliberate rosette rather than a haze.
+    const spread = this.box.w * (0.21 + 0.42 * this.busy);
 
     ctx.save();
     // Held inside the frame, so the result reads as something printed on a
@@ -340,8 +400,13 @@ export class Piece {
     ctx.globalCompositeOperation = 'multiply';
     for (const b of blooms) {
       const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, spread * b.weight);
+      // Held near full out to the middle of its reach and then dropped, so a
+      // bloom reads as a field of colour with an edge rather than as haze. The
+      // old even falloff spent most of its radius near zero, which is what
+      // made the ground look washed rather than printed.
       g.addColorStop(0, rgbaFromHex(b.hue, chroma));
-      g.addColorStop(0.55, rgbaFromHex(b.hue, chroma * 0.32));
+      g.addColorStop(0.4, rgbaFromHex(b.hue, chroma * 0.55));
+      g.addColorStop(0.75, rgbaFromHex(b.hue, chroma * 0.14));
       g.addColorStop(1, rgbaFromHex(b.hue, 0));
       ctx.fillStyle = g;
       ctx.fillRect(
@@ -405,39 +470,6 @@ export class Piece {
       ctx.lineWidth = width;
       ctx.stroke();
 
-      // Moving fast drags the mark apart into colour, the way a quick pull
-      // separates pigment. This is the "wilder the faster" — it rides the speed
-      // of the hand, never the answer that was taken.
-      if (speed > 0.3) {
-        const off = (speed - 0.3) * 9 * scale;
-        const fringe = 0.5 * (speed - 0.3);
-        ctx.lineWidth = Math.max(0.5, width * 0.65);
-        for (const [hue, dir] of [
-          [HUES[2], 1],
-          [HUES[0], -1]
-        ] as const) {
-          ctx.beginPath();
-          let moved = false;
-          for (let i = from; i <= to; i++) {
-            const prev = line[Math.max(from, i - 1)];
-            const cur = line[i];
-            const dx = cur.nx - prev.nx;
-            const dy = cur.ny - prev.ny;
-            const len = Math.hypot(dx, dy) || 1;
-            const p = this.at(cur.nx, cur.ny);
-            const ox = (-dy / len) * off * dir;
-            const oy = (dx / len) * off * dir;
-            if (!moved) {
-              ctx.moveTo(p.x + ox, p.y + oy);
-              moved = true;
-            } else {
-              ctx.lineTo(p.x + ox, p.y + oy);
-            }
-          }
-          ctx.strokeStyle = rgbaFromHex(hue, fringe);
-          ctx.stroke();
-        }
-      }
     };
 
     for (let i = 1; i < shown; i++) {
@@ -453,6 +485,135 @@ export class Piece {
       }
     }
     flush(start, shown - 1, band);
+  }
+
+  /**
+   * The paint that left the bucket.
+   *
+   * The craft is a bucket on the end of an arm: paint is flung off it sideways,
+   * trailing the direction of travel, and lands as a tapering flick with a
+   * spatter of drops past the tip. What the record decides is the *shape* of
+   * each flick, never how many there are — throws are sampled at a fixed stride
+   * along a record whose points are already spaced by forward travel, so a
+   * flight that held its line throws exactly as often as one that ranged.
+   *
+   * Which is the rule this file exists to keep, applied to paint. Speed does
+   * not buy more marks, it changes their character: a slow bucket dribbles
+   * short fat wet ones, a fast bucket flings long thin ones that separate into
+   * colour. Two schools, both finished.
+   *
+   * Direction is the outside of the turn, as centrifugal throw must be. Where
+   * the craft barely moved there is no turn to be outside of, so it slides to a
+   * steadily rotating fan — the same answer the blooms give to the same
+   * problem: where there is a shape, follow it; where there is none, compose.
+   */
+  private makeThrows(): Throw[] {
+    const line = this.input.line;
+    if (line.length < 4) return [];
+    const scale = this.box.w / 340;
+    const fastAt = Math.max(0.02, this.input.stats.peakLateral * 0.55);
+    const stride = Math.max(1, Math.round(line.length / 84));
+    const out: Throw[] = [];
+
+    for (let i = stride; i < line.length - 1; i += stride) {
+      const prev = line[Math.max(0, i - stride)];
+      const cur = line[i];
+      const next = line[Math.min(line.length - 1, i + stride)];
+
+      const ax = cur.nx - prev.nx;
+      const ay = cur.ny - prev.ny;
+      const bx = next.nx - cur.nx;
+      const by = next.ny - cur.ny;
+      const travel = Math.hypot(bx + ax, by + ay);
+      // Enough movement to have a direction at all, in frame widths.
+      const organic = clamp01(travel / 0.02);
+
+      let tx = 0;
+      let ty = 0;
+      if (travel > 1e-6) {
+        tx = (ax + bx) / travel;
+        ty = (ay + by) / travel;
+      }
+
+      // Outside of the turn; a straight run has no outside, so alternate.
+      const cross = ax * by - ay * bx;
+      const side = Math.abs(cross) > 1e-7 ? (cross >= 0 ? -1 : 1) : noise(i, 1) > 0.5 ? 1 : -1;
+      const spin = i * 2.39996;
+      const dirX = -ty * side * organic + Math.cos(spin) * (1 - organic);
+      const dirY = tx * side * organic + Math.sin(spin) * (1 - organic);
+      const dl = Math.hypot(dirX, dirY) || 1;
+
+      const speed = clamp01(this.speeds[i] / fastAt);
+      const wobble = 0.72 + 0.56 * noise(i, 2);
+      out.push({
+        i,
+        ...this.at(cur.nx, cur.ny),
+        dx: dirX / dl,
+        dy: dirY / dl,
+        tx,
+        ty,
+        len: (7 + 52 * speed) * scale * wobble,
+        half: (3.4 - 2.2 * speed) * scale * (0.8 + 0.4 * noise(i, 3)),
+        speed,
+        paint: PAINTS[side > 0 ? 0 : 1],
+        drops: Array.from({ length: 1 + Math.round(speed * 2) }, (_, k) => ({
+          at: 1.12 + k * 0.34 + noise(i, 10 + k) * 0.3,
+          r: (1.5 - 0.32 * k) * scale * (0.6 + 0.9 * noise(i, 20 + k)),
+          off: (noise(i, 30 + k) - 0.5) * 0.5
+        }))
+      });
+    }
+    return out;
+  }
+
+  /** The flung paint, laid under the mark it came off. */
+  private drawThrows(): void {
+    const { ctx } = this;
+    if (!this.throwsCache) this.throwsCache = this.makeThrows();
+    const shown = this.input.line.length * this.reveal;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(this.box.x, this.box.y, this.box.w, this.box.h);
+    ctx.clip();
+
+    for (const t of this.throwsCache) {
+      if (t.i > shown) continue;
+      const [r, g, b] = inkToward(t.paint, 0.18 + 0.62 * t.speed);
+      // A slow throw is a wet deposit and sits heavier than a fast, dry one.
+      const alpha = 0.5 - 0.16 * t.speed;
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+
+      // The flick keeps the bucket's own motion, so it arcs rather than
+      // pointing straight out.
+      const ex = t.x + t.dx * t.len + t.tx * t.len * 0.34;
+      const ey = t.y + t.dy * t.len + t.ty * t.len * 0.34;
+      const cx = t.x + t.dx * t.len * 0.5 + t.tx * t.len * 0.5;
+      const cy = t.y + t.dy * t.len * 0.5 + t.ty * t.len * 0.5;
+      const px = -t.dy * t.half;
+      const py = t.dx * t.half;
+
+      ctx.beginPath();
+      ctx.moveTo(t.x + px, t.y + py);
+      ctx.quadraticCurveTo(cx + px * 0.45, cy + py * 0.45, ex, ey);
+      ctx.quadraticCurveTo(cx - px * 0.45, cy - py * 0.45, t.x - px, t.y - py);
+      ctx.closePath();
+      ctx.fill();
+
+      // The blob left where the paint tore away from the rim.
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, t.half, 0, Math.PI * 2);
+      ctx.fill();
+
+      for (const d of t.drops) {
+        const dx = t.x + t.dx * t.len * d.at + t.tx * t.len * 0.34 * d.at - t.dy * t.len * d.off;
+        const dy = t.y + t.dy * t.len * d.at + t.ty * t.len * 0.34 * d.at + t.dx * t.len * d.off;
+        ctx.beginPath();
+        ctx.arc(dx, dy, d.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   /**
@@ -489,34 +650,13 @@ export class Piece {
     }
   }
 
-  private drawMarks(): void {
-    const { ctx } = this;
-    const line = this.input.line;
-    if (line.length < 2) return;
-    const scale = this.box.w / 340;
-    const shown = Math.max(1, Math.floor(line.length * this.reveal)) - 1;
-
-    const first = this.at(line[0].nx, line[0].ny);
-    ctx.fillStyle = `rgba(${INK},0.5)`;
-    ctx.beginPath();
-    ctx.arc(first.x, first.y, 2.2 * scale, 0, Math.PI * 2);
-    ctx.fill();
-
-    const endPoint = line[Math.min(line.length - 1, shown)];
-    const end = this.at(endPoint.nx, endPoint.ny);
-    ctx.fillStyle = `rgba(${INK},0.9)`;
-    ctx.beginPath();
-    ctx.arc(end.x, end.y, 3.4 * scale, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   private drawGrain(): void {
     const { ctx, W, H } = this;
     if (!this.grain) this.grain = this.makeGrain();
     const pattern = ctx.createPattern(this.grain, 'repeat');
     if (!pattern) return;
     ctx.save();
-    ctx.globalAlpha = 0.05;
+    ctx.globalAlpha = 0.038;
     ctx.globalCompositeOperation = 'multiply';
     ctx.fillStyle = pattern;
     ctx.fillRect(0, 0, W, H);
