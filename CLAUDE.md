@@ -64,8 +64,15 @@ built: the journal (past flights, on-device), export/import, offline,
 and home-screen install.
 
 After each flight the record becomes a piece: the line drawn flat on
-paper, the ground coloured by the answers, the ink weighted by how
-fast the craft was moved, and a ring wherever the thumb came off. The
+paper, the ground coloured by the colours the gates dealt, the ink
+weighted by how fast the craft was moved, and a ring wherever the
+thumb came off. A gate deals four colours as it comes into view and
+wears them, so a choice is made with the colour in sight; which cell
+holds which is random every time, and the four are equal in lightness
+and chroma. `src/lib/game/hues.ts` says why that had to stop being
+learnable. The colours live on the record, since a random deal cannot
+be recomputed. What paper it prints on is bought in the workshop
+(`src/lib/game/pieceStyle.ts`). The
 3D object is still there behind a toggle. `docs/DESIGN.md` has a
 section on it — read "The rule this has to keep" before changing
 anything there, because a straight flight and a wandering one must

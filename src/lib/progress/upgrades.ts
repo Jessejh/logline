@@ -1,4 +1,5 @@
 import type { Palette } from '../game/palette';
+import type { PieceStyle } from '../game/pieceStyle';
 
 /**
  * What credits buy.
@@ -14,7 +15,7 @@ import type { Palette } from '../game/palette';
  * free and reversible.
  */
 
-export type UpgradeCategory = 'craft' | 'gates' | 'sky';
+export type UpgradeCategory = 'craft' | 'gates' | 'sky' | 'piece';
 
 export interface Upgrade {
   id: string;
@@ -24,12 +25,15 @@ export interface Upgrade {
   blurb: string;
   cost: number;
   palette: Partial<Palette>;
+  /** Only on 'piece' upgrades: the paper the day is printed on. */
+  piece?: Partial<PieceStyle>;
 }
 
 export const CATEGORY_LABELS: Record<UpgradeCategory, string> = {
   craft: 'Hull',
   gates: 'Frames',
-  sky: 'Sky'
+  sky: 'Sky',
+  piece: 'Paper'
 };
 
 /**
@@ -37,7 +41,7 @@ export const CATEGORY_LABELS: Record<UpgradeCategory, string> = {
  * 24–64 a day, so the first hull is about two days in and the far end of the
  * list is a few weeks of showing up.
  */
-export const UPGRADES: readonly Upgrade[] = [
+const SKINS: readonly Upgrade[] = [
   {
     id: 'craft-brass',
     category: 'craft',
@@ -97,8 +101,79 @@ export const UPGRADES: readonly Upgrade[] = [
   }
 ];
 
+/**
+ * What the day gets printed on.
+ *
+ * A paper changes the material and nothing else: each of these has to render a
+ * flight that held its line and one that ranged wide as two kinds of finished
+ * picture, or it would be selling a better day rather than a different sheet.
+ * The dark ones print in `screen` because pigment multiplied into a dark ground
+ * only ever subtracts its way to nothing.
+ */
+const PAPERS: readonly Upgrade[] = [
+  {
+    id: 'piece-nightprint',
+    category: 'piece',
+    name: 'Nightprint',
+    blurb: 'The same day, printed light on dark.',
+    cost: 140,
+    palette: {},
+    piece: {
+      cool: '#0e1220',
+      warm: '#1a1626',
+      ink: '226, 234, 240',
+      paints: ['#7fd4ff', '#ffb38a'],
+      blend: 'screen',
+      grain: 0.05,
+      chroma: 0.64
+    }
+  },
+  {
+    id: 'piece-linen',
+    category: 'piece',
+    name: 'Linen',
+    blurb: 'Heavy warm stock with a tooth you can feel.',
+    cost: 110,
+    palette: {},
+    piece: {
+      cool: '#efe7d8',
+      warm: '#f2e3c8',
+      ink: '52, 40, 30',
+      paints: ['#3f5d43', '#8c4a2f'],
+      grain: 0.085,
+      chroma: 0.54
+    }
+  },
+  {
+    id: 'piece-cyanotype',
+    category: 'piece',
+    name: 'Cyanotype',
+    blurb: 'Printed in Prussian blue, the way a sun-print comes out.',
+    cost: 220,
+    palette: {},
+    piece: {
+      cool: '#123a5c',
+      warm: '#1b4a6b',
+      ink: '223, 236, 244',
+      paints: ['#bfe4f5', '#f2d9a8'],
+      blend: 'screen',
+      grain: 0.06,
+      chroma: 0.56
+    }
+  }
+];
+
+/** Everything for sale, in the order the workshop lists it. */
+export const UPGRADES: readonly Upgrade[] = [...SKINS, ...PAPERS];
+
 export function upgradeById(id: string): Upgrade | undefined {
   return UPGRADES.find((u) => u.id === id);
+}
+
+/** Merge the equipped paper into one set of style overrides. */
+export function pieceStyleFor(equipped: Equipped): Partial<PieceStyle> {
+  const upgrade = equipped.piece ? upgradeById(equipped.piece) : undefined;
+  return upgrade?.piece ?? {};
 }
 
 /** The equipped skin per category. Absent means the base look. */

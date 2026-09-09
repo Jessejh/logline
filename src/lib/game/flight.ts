@@ -1,4 +1,5 @@
 import { craftTail, drawCraftBody } from './craft';
+import { gateHues } from './hues';
 import { PALETTE, withAlpha } from './palette';
 import { QUESTIONS } from './questions';
 import type { Answer, FlightResult, LinePoint, Question } from './types';
@@ -117,6 +118,8 @@ interface Gate {
   skipped: boolean;
   pick: { ix: number; iy: number } | null;
   flash: number;
+  /** One colour per column, dealt when the gate comes into view. */
+  hues: string[] | null;
 }
 
 interface Star {
@@ -134,6 +137,7 @@ interface Pop {
   edge: boolean;
   /** A gate left open says so plainly, without the flourish of a find. */
   quiet: boolean;
+  hue?: string;
 }
 
 interface Spark {
@@ -143,6 +147,8 @@ interface Spark {
   vy: number;
   t: number;
   edge: boolean;
+  /** The colour taken off the wall, or null for a gate left open. */
+  hue: string | null;
 }
 
 /**
@@ -153,6 +159,7 @@ interface Burst {
   x: number;
   y: number;
   t: number;
+  hue: string;
 }
 
 interface Aim {
@@ -261,6 +268,16 @@ export class Flight {
   private zoom = 1;
   private focus = { x: 0, y: 0 };
   private aim: Aim = { gate: null, x: 0, y: 0, inside: true, ix: 0, iy: 0, path: [] };
+
+  /**
+   * How the flight is going so far, 0 quiet to 1 loud, and the only thing the
+   * colours are made of. Answers never touch it — see `lib/game/hues.ts`.
+   */
+  private hoverTime = 0;
+  private flyTime = 0;
+  private rush = 0;
+  /** Where this flight's colours start on the wheel. New every flight. */
+  private hueBase = 0;
 
   private zDist = 0;
   private time = 0;
@@ -448,6 +465,10 @@ export class Flight {
     this.pops = [];
     this.sparks = [];
     this.bursts = [];
+    this.hoverTime = 0;
+    this.flyTime = 0;
+    this.rush = 0;
+    this.hueBase = Math.random() * 360;
     this.zDist = 0;
     this.time = 0;
     this.finished = false;
@@ -467,7 +488,8 @@ export class Flight {
       done: false,
       skipped: false,
       pick: null,
-      flash: 0
+      flash: 0,
+      hues: null
     }));
     this.stars = [];
     const n = this.reduced ? 80 : 220;
@@ -615,6 +637,19 @@ export class Flight {
     const follow = 1 - Math.exp(-CAM_LAG * dt);
     this.cam.x += (target.x - this.cam.x) * follow;
     this.cam.y += (target.y - this.cam.y) * follow;
+
+    // Quiet or loud, measured as it happens: the colours are dealt while the
+    // flight is still going, so they can only be made of what has happened so
+    // far. Nothing here reads an answer.
+    if (this.beat.running) {
+      /* the scripted stop is not the player's stillness */
+    } else if (held) {
+      this.flyTime += dt;
+      const lateral = Math.hypot(p.vx, p.vy) / 900;
+      this.rush += (Math.min(1, lateral) - this.rush) * 1.2 * dt;
+    } else if (this.met > 0 || this.flyTime > 0) {
+      this.hoverTime += dt;
+    }
 
     this.zDist += speed * dt;
 
@@ -905,14 +940,26 @@ export class Flight {
         ? `${g.q.xAxis[ix < nx / 2 ? 0 : 1]} / ${g.q.yAxis[iy < g.q.rows.length / 2 ? 0 : 1]}`
         : g.q.cols[ix];
 
-    this.answers.push({ q: g.q.q, gate: g.n, label, item: g.q.items[ix], edge, refined, ix, iy });
+    const hue = this.huesFor(g)[ix];
+    this.answers.push({
+      q: g.q.q,
+      gate: g.n,
+      hue,
+      label,
+      item: g.q.items[ix],
+      edge,
+      refined,
+      ix,
+      iy
+    });
     this.pops.push({
       text: `+ ${g.q.items[ix]}`,
       x: this.plane.x,
       y: this.plane.y - 68,
       t: 0,
       edge,
-      quiet: false
+      quiet: false,
+      hue
     });
 
     // Shards of the wall, thrown wider across it than along the flight path.
@@ -925,11 +972,12 @@ export class Flight {
         vx: Math.cos(a) * sp * 1.5,
         vy: Math.sin(a) * sp * 0.8,
         t: 0,
-        edge
+        edge,
+        hue
       });
     }
 
-    this.bursts.push({ x: this.plane.x, y: this.plane.y, t: 0 });
+    this.bursts.push({ x: this.plane.x, y: this.plane.y, t: 0, hue });
 
     // The wings flick as the gate passes.
     this.plane.wingLv += 2.4;
@@ -937,6 +985,32 @@ export class Flight {
 
     // Android only — iOS Safari has no vibration API at all.
     navigator.vibrate?.(14);
+  }
+
+  /**
+   * 0 for a flight that keeps stopping, 1 for one taken fast and unbroken. The
+   * character of a gate's colours, and nothing else.
+   */
+  private mood(): number {
+    const total = this.flyTime + this.hoverTime;
+    const calm = total > 0.5 ? this.hoverTime / total : 0;
+    return Math.max(0, Math.min(1, 0.45 + 0.55 * this.rush - 0.95 * calm));
+  }
+
+  /**
+   * Colours are dealt once, as the gate comes into view, and then stand.
+   *
+   * The family turns as the flight goes on — a little between gates on a
+   * flight that keeps stopping, a long way on one taken fast — so a calm day
+   * comes back as eight neighbours and a loud one as most of the wheel.
+   */
+  private huesFor(g: Gate): string[] {
+    if (!g.hues) {
+      const wild = this.mood();
+      const base = this.hueBase + g.n * (11 + 46 * wild);
+      g.hues = gateHues(g.q.cols.length, wild, base);
+    }
+    return g.hues;
   }
 
   private setQuestion(text: string | null): void {
@@ -996,7 +1070,7 @@ export class Flight {
     for (const s of this.sparks) {
       const v = this.view(s.x, s.y, 1);
       ctx.globalAlpha = (1 - s.t / 1.1) * 0.8;
-      ctx.fillStyle = s.edge ? PALETTE.lamp : PALETTE.ice;
+      ctx.fillStyle = s.hue ?? (s.edge ? PALETTE.lamp : PALETTE.ice);
       ctx.fillRect(v.x - 1.3, v.y - 1.3, 2.6, 2.6);
     }
     ctx.globalAlpha = 1;
@@ -1010,7 +1084,7 @@ export class Flight {
     for (const pop of this.pops) {
       const k = pop.t / 2.3;
       ctx.globalAlpha = k < 0.12 ? k / 0.12 : Math.max(0, (1 - k) * 1.5);
-      ctx.fillStyle = pop.quiet ? PALETTE.label : pop.edge ? PALETTE.lamp : '#bfe0e2';
+      ctx.fillStyle = pop.quiet ? PALETTE.label : (pop.hue ?? (pop.edge ? PALETTE.lamp : '#bfe0e2'));
       ctx.font = `500 16px ${this.fontFamily}`;
       ctx.textAlign = 'center';
       const v = this.view(pop.x, pop.y, 1);
@@ -1208,7 +1282,7 @@ export class Flight {
       const fade = (1 - k) * (1 - k);
 
       ctx.globalAlpha = fade * 0.8;
-      ctx.strokeStyle = PALETTE.trailHot;
+      ctx.strokeStyle = b.hue;
       ctx.lineWidth = Math.max(1, 10 * (1 - k));
       ctx.beginPath();
       ctx.arc(b.x, b.y, 26 + ease * 320, 0, Math.PI * 2);
@@ -1226,8 +1300,8 @@ export class Flight {
         const f = 1 - k / 0.4;
         const r = 30 + 80 * f;
         const flare = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
-        flare.addColorStop(0, withAlpha(PALETTE.ice, 0.55 * f));
-        flare.addColorStop(1, withAlpha(PALETTE.ice, 0));
+        flare.addColorStop(0, withAlpha(b.hue, 0.6 * f));
+        flare.addColorStop(1, withAlpha(b.hue, 0));
         ctx.globalAlpha = 1;
         ctx.fillStyle = flare;
         ctx.fillRect(b.x - r, b.y - r, r * 2, r * 2);
@@ -1266,14 +1340,21 @@ export class Flight {
     ctx.save();
     ctx.globalAlpha = a;
 
+    // Each column carries the colour it would give you, so the choice is made
+    // with the colour in view rather than discovered afterwards on the piece.
+    // Which column holds which is dealt at random — see `lib/game/hues.ts`.
+    const hues = this.huesFor(g);
     for (let i = 0; i < nx; i++) {
       for (let j = 0; j < ny; j++) {
         const isEdge = i === 0 || i === nx - 1 || (ny > 1 && (j === 0 || j === ny - 1));
         const picked = g.pick?.ix === i && g.pick?.iy === j;
-        let fill = isEdge ? 'rgba(232,184,122,0.05)' : 'rgba(45,107,122,0.04)';
-        if (picked && g.flash > 0) fill = `rgba(232,184,122,${0.3 * g.flash})`;
-        ctx.fillStyle = fill;
+        const hue = hues[Math.min(hues.length - 1, i)];
+        ctx.fillStyle = withAlpha(hue, (0.1 + 0.16 * near) * (isEdge ? 1.25 : 1));
         ctx.fillRect(x0 + i * cw, y0 + j * ch, cw, ch);
+        if (picked && g.flash > 0) {
+          ctx.fillStyle = withAlpha(hue, 0.55 * g.flash);
+          ctx.fillRect(x0 + i * cw, y0 + j * ch, cw, ch);
+        }
       }
     }
 
@@ -1282,9 +1363,10 @@ export class Flight {
     if (aimed && !g.done && this.aim.inside) {
       const ax = x0 + this.aim.ix * cw;
       const ay = y0 + this.aim.iy * ch;
-      ctx.fillStyle = withAlpha(PALETTE.ice, 0.08 + 0.1 * near + 0.04 * pulse);
+      const aimHue = hues[Math.min(hues.length - 1, this.aim.ix)];
+      ctx.fillStyle = withAlpha(aimHue, 0.16 + 0.2 * near + 0.06 * pulse);
       ctx.fillRect(ax, ay, cw, ch);
-      ctx.strokeStyle = withAlpha(PALETTE.trailHot, 0.45 + 0.4 * near);
+      ctx.strokeStyle = withAlpha(aimHue, 0.6 + 0.35 * near);
       ctx.lineWidth = Math.max(0.8, 1.6 * s);
       ctx.strokeRect(ax + 1, ay + 1, cw - 2, ch - 2);
     }
@@ -1328,9 +1410,10 @@ export class Flight {
         const t = Math.max(0, 1 - g.dist / 7);
         const { x: bx, y: by } = this.view(this.aim.x, this.aim.y, s);
         const r = Math.max(8, (18 + 60 * t) * s);
+        const touch = hues[Math.min(hues.length - 1, this.aim.ix)];
         const bloom = ctx.createRadialGradient(bx, by, 0, bx, by, r);
-        bloom.addColorStop(0, withAlpha(PALETTE.trailHot, 0.38 * t * t));
-        bloom.addColorStop(1, withAlpha(PALETTE.trailHot, 0));
+        bloom.addColorStop(0, withAlpha(touch, 0.45 * t * t));
+        bloom.addColorStop(1, withAlpha(touch, 0));
         ctx.fillStyle = bloom;
         ctx.fillRect(bx - r, by - r, r * 2, r * 2);
       }
@@ -1474,7 +1557,7 @@ export class Flight {
         const [ax0, ay0] = at(g.pick.ix / nx, g.pick.iy / ny, db);
         const [ax1, ay1] = at((g.pick.ix + 1) / nx, (g.pick.iy + 1) / ny, db);
         ctx.globalAlpha = 0.55 * fade;
-        ctx.fillStyle = PALETTE.lamp;
+        ctx.fillStyle = g.hues?.[Math.min(g.hues.length - 1, g.pick.ix)] ?? PALETTE.lamp;
         ctx.fillRect(Math.min(ax0, ax1), ay0, Math.abs(ax1 - ax0), ay1 - ay0);
       }
     }

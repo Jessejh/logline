@@ -23,6 +23,14 @@ export interface Answer {
    * be skipped, where the answers were always all eight in order.
    */
   gate?: number;
+  /**
+   * The colour that was on the cell taken, as it was on the day. Held on the
+   * record rather than derived from the answer, because a gate's colours are
+   * dealt at random and cannot be worked out again afterwards — and because
+   * that randomness is the point: nothing about the colour can be aimed for.
+   * Absent on records written before the colours moved.
+   */
+  hue?: string;
   /** Human-readable answer, e.g. "Deep" or "Calm / Heavy". */
   label: string;
   item: string;

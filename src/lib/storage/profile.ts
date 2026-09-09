@@ -1,6 +1,13 @@
 import { applyPalette } from '../game/palette';
+import { applyStyle } from '../game/pieceStyle';
 import { currentStreak, rateFor, streakIncludingToday } from '../progress/credits';
-import { paletteFor, upgradeById, type Equipped, type UpgradeCategory } from '../progress/upgrades';
+import {
+  paletteFor,
+  pieceStyleFor,
+  upgradeById,
+  type Equipped,
+  type UpgradeCategory
+} from '../progress/upgrades';
 import { get, PROFILE, put } from './db';
 import { listEntries, localDay } from './entries';
 
@@ -64,6 +71,7 @@ export function isProfile(value: unknown): value is Profile {
 /** Push the equipped skins into the live canvas palette. */
 export function applyProfileSkin(profile: Profile): void {
   applyPalette(paletteFor(profile.equipped));
+  applyStyle(pieceStyleFor(profile.equipped));
 }
 
 export interface Award {
