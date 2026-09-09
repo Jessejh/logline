@@ -189,9 +189,13 @@ eight blooms stacked on one spot and mixed to mud. That reads as
   falls away. Where there is a shape, follow it; where there is none,
   compose. Restraint comes out ordered rather than empty.
 
-The same discipline covers the palette: four hues, one per column,
-picked at about equal lightness and chroma so no cell is a prettier
-cell to land in.
+The same discipline covers the palette: four hues, one per column, at
+equal lightness and chroma so no cell is a prettier cell to land in.
+These are now solved rather than picked — same hue angles, every one
+placed at L* 68 and C* 50 in Lab, which is the sharpest chroma all
+four can reach in sRGB while staying identical in weight. The
+hand-picked set they replace spanned L* 66 to 74, so it was both
+duller and less even than it meant to be.
 
 ### What drives what
 
@@ -208,9 +212,26 @@ cell to land in.
   normalised inside each flight, so a busy day reads as fast
   everywhere, and letting that thin the whole mark would make the
   liveliest days the faintest pictures.
-- **Colour along the line** — speed again. A quick pull drags the
-  mark apart into a coloured fringe, the way it separates pigment.
-  It rides the speed of the hand, never the answer taken.
+- **Thrown paint** — the craft is a bucket on the end of an arm, and
+  paint leaves it sideways: every flick is thrown to the outside of
+  the turn, trailing the direction of travel, and lands as a tapering
+  streak with a spatter of drops past the tip. Where the craft barely
+  moved there is no turn to be outside of, so the direction slides to
+  a steadily rotating fan — the same answer the blooms give to the
+  same problem.
+
+  What the record decides is the *shape* of a flick, never how many
+  there are. Throws are sampled at a fixed stride along a record whose
+  points are already spaced by forward travel, so a flight that held
+  its line throws exactly as often as one that ranged: a slow bucket
+  dribbles short fat wet ones, a fast bucket flings long thin ones
+  that separate into colour. That is the rule of this screen applied
+  to paint — speed does not buy more marks, it changes their
+  character.
+
+  The two paints a fast throw separates into are deliberately not the
+  answer hues. The ground says what you answered and the mark says how
+  you moved, and a mark wearing an answer's colour blurs the two.
 - **Density** — nothing computes it. Points are laid down at equal
   intervals of *forward* travel, so holding the craft still sideways
   piles many of them on one spot; drawing every segment at low alpha
@@ -219,6 +240,10 @@ cell to land in.
   strokes bead at every joint into a string of pearls.
 - **Pauses** — a ring where the thumb came off, sized by how long.
 
+There is no dot at either end of the mark. A start and an end point
+are a drafting convention, and on a piece made of thrown paint they
+read as something spilled rather than as punctuation.
+
 ### The clock
 
 `LinePoint` carries `t`, seconds since the flight began, and
@@ -226,6 +251,16 @@ cell to land in.
 a pause writes no point at all — which meant a long hesitation and no
 hesitation produced identical records. With a clock on each point a
 pause is a large gap in `t` across a tiny gap in `z`.
+
+Finding a pause takes both halves of that sentence. The first version
+tested the time gap alone, which is not the same claim: a stored record
+is thinned to a fixed number of points, so the longer the flight, the
+further apart in time two neighbouring points sit whether or not the
+craft ever stopped. A long, thoughtful flight put every gap over the
+threshold and came back reporting a pause at every point — the reading
+that would be furthest from the truth for exactly the person the app is
+for. The flying time the distance covered would have taken is now
+subtracted out, and what is left is the stopped time.
 
 Two things fall out of it worth knowing. `t` accumulates the frame
 delta the flight already clamps, so a stalled tab cannot fake a
