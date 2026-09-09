@@ -42,9 +42,11 @@ The grading phase runs as an installable web app in `src/`. It began
 as a faithful port of the prototype and the steering constants in
 `src/lib/game/flight.ts` are still the prototype's, unchanged. On top
 of that: hold-to-fly (the thumb is the throttle), the aimed cell lit
-on the next gate, the trail drawn behind the craft, a rear-view
-mirror, a small 3D craft with hinged wings, and a 3D artwork of the
-logged line after each flight (`src/lib/game/artwork.ts`). Also
+on the next gate, gates as walls of light that are punched through
+rather than passed, the trail drawn behind the craft, a rear-view
+mirror, a 3D craft with hinged wings (`src/lib/game/craft.ts`, shared
+with the workshop's previews), and a 3D artwork of the logged line
+after each flight (`src/lib/game/artwork.ts`). Also
 built: the journal (past flights, on-device), export/import, offline,
 and home-screen install.
 

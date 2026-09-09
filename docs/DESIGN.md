@@ -78,7 +78,12 @@ gate is passed the craft glides out on its own.
 
 3. **Collection and workshop** (built)
    Where the gathered material goes, and what showing up buys.
-   See "The collection pipeline" below.
+   See "The collection pipeline" below. Every item in the workshop
+   is pictured by the flight's own renderers — the hull mesh, a gate
+   with its wall lit, the sky's wash and stars — rather than by a
+   swatch or a drawn illustration. A shop is a promise about how the
+   flight will look, and the only way to keep that promise honest as
+   the flight changes is for both to run the same code.
 
 The village phase that used to sit at position 3 is parked — see
 "Parked: the village".
@@ -348,7 +353,20 @@ deliberate change, not drift:
   point and the passed gates receding with their chosen cell lit.
 - **A winged craft.** A small 3D mesh replaces the flat diamond.
   Wings are stiff hinges driven by lift, roll rate and throttle, with
-  an exhaust glow while there is power on.
+  a hard-edged flame at the tail while there is power on. The soft
+  plume it used to trail read as a smear of light under the craft
+  rather than as thrust, and at the size the craft is drawn now it
+  covered the gate behind it.
+- **Gates are walls, not openings.** Filaments of light strung across
+  the whole frame, so passing a gate is going *through* something.
+  The wall is identical in every cell — it is the one part of a gate
+  that must never suggest one answer is worth more than another.
+  Closing on it, the spot the current heading will touch lights up;
+  crossing it punches a hole, and the wall dissolves rather than
+  being cut, throwing shards and a shockwave off the puncture.
+  Answering is the moment the flight makes the most noise about,
+  which is the right place for it: it is the only moment that
+  records anything.
 - **The artwork.** After the flight, before the summary, the record
   becomes a piece — flat by default, with the turnable 3D object one
   tap away. See "The piece" below. Reachable again from the summary
@@ -364,12 +382,16 @@ deliberate change, not drift:
   moment it turns around. This also drops the prototype's `LIFT`
   offset, which only existed to keep the craft out from under the
   thumb it was pinned to.
-- **A much larger craft.** Drawn at 2.6×. The prototype's size reads
+- **A much larger craft.** Drawn at 3.4×. The prototype's size reads
   as a speck at arm's length, and a speck wastes the animation that
   is already there — each wing is a sprung hinge driven by lift, roll
   rate and throttle, the body banks and pitches off velocity, and it
   bobs while hovering. At the old size all of that was a few pixels
-  of flicker; the point of the number is being able to watch it.
+  of flicker; the point of the number is being able to watch it. The
+  ceiling is the label row along the bottom of a gate, not the gate
+  itself — the answer is read off the lit cell, the reticle and that
+  row, so a craft wide enough to cross two cells costs nothing until
+  it starts covering the words.
   About two cells wide at a full-size gate, which is wide, but the
   answer is read off the lit cell and the reticle rather than the
   silhouette. The exhaust plume is deliberately *not* scaled in step:

@@ -1,12 +1,12 @@
 <script lang="ts">
   import {
     CATEGORY_LABELS,
-    swatchFor,
     UPGRADES,
     type Upgrade,
     type UpgradeCategory
   } from '../lib/progress/upgrades';
   import { buyUpgrade, equipUpgrade, loadProfile, type Profile } from '../lib/storage/profile';
+  import UpgradePreview from './UpgradePreview.svelte';
 
   let { onBack }: { onBack: () => void } = $props();
 
@@ -52,7 +52,8 @@
   <h2>Workshop</h2>
   <p class="lede small">
     {profile?.credits ?? 0} credits. Everything here changes how the flight looks and nothing
-    changes how it goes — there is no score to improve.
+    changes how it goes — there is no score to improve. Each
+    picture is drawn by the flight itself, so it is the thing you get.
   </p>
 
   {#each CATEGORIES as category (category)}
@@ -68,7 +69,7 @@
         {@const owned = owns(upgrade.id)}
         {@const fitted = equippedIn(category) === upgrade.id}
         <div class="item" class:fitted>
-          <span class="swatch" style="background: {swatchFor(upgrade)}"></span>
+          <UpgradePreview upgrade={upgrade} />
           <div class="text">
             <span class="name">{upgrade.name}</span>
             <span class="blurb">{upgrade.blurb}</span>
@@ -130,14 +131,6 @@
     gap: 12px;
     padding: 11px 0;
     border-bottom: 1px solid rgba(45, 107, 122, 0.22);
-  }
-
-  .swatch {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    flex: none;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
   }
 
   .text {
