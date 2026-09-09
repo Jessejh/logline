@@ -1,3 +1,4 @@
+import { inkParts, STYLE } from './pieceStyle';
 import { QUESTIONS } from './questions';
 import { findPauses, lateralSpeeds, type FlightStats } from './stats';
 import type { Answer, LinePoint } from './types';
@@ -38,29 +39,22 @@ export interface PieceInput {
 }
 
 /**
- * One hue per column of a gate, deliberately equal in weight — see the note
- * above. These four are solved rather than picked: same hue angles as before,
- * but every one placed at L* 68 and C* 50 in Lab, the sharpest chroma all four
- * can reach in sRGB while staying identical in weight. Matched to two decimal
- * places, so no answer is a prettier answer — which the old hand-picked set,
- * spanning L* 66 to 74, only approximated.
+ * What a column used to be worth, kept only to redraw records written before
+ * a gate started dealing its colours at random. Nothing new is ever coloured
+ * from this — see `lib/game/hues.ts` for why the mapping had to stop being
+ * learnable.
  */
 const HUES = ['#00bc95', '#14affe', '#cd9e4b', '#f281b7'];
 
 /**
- * The two paints that separate out of a fast throw. Deliberately *not* the
- * answer hues: the ground says what you answered and the mark says how you
- * moved, and a mark wearing an answer's colour blurs the two.
+ * Paper, ink and the two paints all come from the equipped style — see
+ * `lib/game/pieceStyle.ts`. Read while drawing rather than captured at import,
+ * so fitting a different paper redraws every entry in it.
+ *
+ * The paints are deliberately *not* the answer colours: the ground carries
+ * those and the mark carries how you moved, and a mark wearing an answer's
+ * colour blurs the two.
  */
-const PAINTS = ['#123f6e', '#a33a2b'];
-
-/** Paper at rest, and paper on a day that kept stopping. */
-const COOL_GROUND = '#e8ecef';
-const WARM_GROUND = '#f4ecdd';
-
-/** Ink. Never pure black — it sits on paper, not on a screen. */
-const INK = '20, 26, 34';
-const INK_RGB = [20, 26, 34] as const;
 
 /** Frame widths of travel that count as a full day of moving. */
 const BUSY_FULL = 6;
@@ -93,10 +87,11 @@ function rgbaFromHex(hex: string, alpha: number): string {
 function inkToward(hex: string, t: number): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   const k = clamp01(t);
+  const ink = inkParts();
   return [
-    Math.round(INK_RGB[0] * (1 - k) + ((n >> 16) & 255) * k),
-    Math.round(INK_RGB[1] * (1 - k) + ((n >> 8) & 255) * k),
-    Math.round(INK_RGB[2] * (1 - k) + (n & 255) * k)
+    Math.round(ink[0] * (1 - k) + ((n >> 16) & 255) * k),
+    Math.round(ink[1] * (1 - k) + ((n >> 8) & 255) * k),
+    Math.round(ink[2] * (1 - k) + (n & 255) * k)
   ];
 }
 
@@ -331,7 +326,10 @@ export class Piece {
       out.push({
         x: formal.x + (flown.x - formal.x) * organic,
         y: formal.y + (flown.y - formal.y) * organic,
-        hue: HUES[Math.max(0, Math.min(HUES.length - 1, a.ix))],
+        // The colour that was actually on the cell, as it was dealt on the day.
+        // Records written before the colours moved fall back to the fixed hue
+        // their column used to carry.
+        hue: a.hue ?? HUES[Math.max(0, Math.min(HUES.length - 1, a.ix))],
         weight: 1
       });
     }
@@ -361,7 +359,7 @@ export class Piece {
 
     // A day that kept stopping warms the paper; one taken in a single breath
     // leaves it cool and graphic. Two tempers of the same material.
-    const ground = mixHex(COOL_GROUND, WARM_GROUND, this.stillness);
+    const ground = mixHex(STYLE.cool, STYLE.warm, this.stillness);
     ctx.fillStyle = ground;
     ctx.fillRect(0, 0, W, H);
 
@@ -383,7 +381,7 @@ export class Piece {
     // Pausing is what makes the colour come up. Never stopping leaves a piece
     // that is cooler and more graphic rather than a piece that is washed out —
     // the floor is high enough that colour is always properly present.
-    const chroma = 0.36 + 0.34 * this.stillness;
+    const chroma = STYLE.chroma + 0.36 * this.stillness;
     // A wandering flight lays its blooms far apart and needs a wide field for
     // them to meet at all. A calm one stacks them in the formal ring, where a
     // field that wide simply multiplies eight hues through each other into a
@@ -402,7 +400,7 @@ export class Piece {
     // Multiply, so the hues sink into the paper like pigment rather than
     // sitting on it as chalk. Alpha-blended pastels on a light ground go
     // chalky and, where they overlap, grey.
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalCompositeOperation = STYLE.blend;
     for (const b of blooms) {
       const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, spread * b.weight);
       // Held near full out to the middle of its reach and then dropped, so a
@@ -410,8 +408,8 @@ export class Piece {
       // old even falloff spent most of its radius near zero, which is what
       // made the ground look washed rather than printed.
       g.addColorStop(0, rgbaFromHex(b.hue, chroma));
-      g.addColorStop(0.4, rgbaFromHex(b.hue, chroma * 0.55));
-      g.addColorStop(0.75, rgbaFromHex(b.hue, chroma * 0.14));
+      g.addColorStop(0.45, rgbaFromHex(b.hue, chroma * 0.7));
+      g.addColorStop(0.78, rgbaFromHex(b.hue, chroma * 0.2));
       g.addColorStop(1, rgbaFromHex(b.hue, 0));
       ctx.fillStyle = g;
       ctx.fillRect(
@@ -471,7 +469,7 @@ export class Piece {
         const p = this.at(line[i].nx, line[i].ny);
         ctx.lineTo(p.x, p.y);
       }
-      ctx.strokeStyle = `rgba(${INK},${alpha})`;
+      ctx.strokeStyle = `rgba(${STYLE.ink},${alpha})`;
       ctx.lineWidth = width;
       ctx.stroke();
 
@@ -560,7 +558,7 @@ export class Piece {
         len: (7 + 52 * speed) * scale * wobble,
         half: (3.4 - 2.2 * speed) * scale * (0.8 + 0.4 * noise(i, 3)),
         speed,
-        paint: PAINTS[side > 0 ? 0 : 1],
+        paint: STYLE.paints[side > 0 ? 0 : 1],
         drops: Array.from({ length: 1 + Math.round(speed * 2) }, (_, k) => ({
           at: 1.12 + k * 0.34 + noise(i, 10 + k) * 0.3,
           r: (1.5 - 0.32 * k) * scale * (0.6 + 0.9 * noise(i, 20 + k)),
@@ -640,14 +638,14 @@ export class Piece {
       const r = (5 + 20 * weight) * scale;
 
       const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
-      g.addColorStop(0, `rgba(${INK},${0.1 + 0.12 * weight})`);
-      g.addColorStop(1, `rgba(${INK},0)`);
+      g.addColorStop(0, `rgba(${STYLE.ink},${0.1 + 0.12 * weight})`);
+      g.addColorStop(1, `rgba(${STYLE.ink},0)`);
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(x, y, r * 2.4, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.strokeStyle = `rgba(${INK},${0.16 + 0.3 * weight})`;
+      ctx.strokeStyle = `rgba(${STYLE.ink},${0.16 + 0.3 * weight})`;
       ctx.lineWidth = 0.8 * scale;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -661,8 +659,8 @@ export class Piece {
     const pattern = ctx.createPattern(this.grain, 'repeat');
     if (!pattern) return;
     ctx.save();
-    ctx.globalAlpha = 0.038;
-    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = STYLE.grain;
+    ctx.globalCompositeOperation = STYLE.blend;
     ctx.fillStyle = pattern;
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
@@ -671,14 +669,14 @@ export class Piece {
   private drawFrame(): void {
     const { ctx } = this;
     const b = this.box;
-    ctx.strokeStyle = `rgba(${INK},0.16)`;
+    ctx.strokeStyle = `rgba(${STYLE.ink},0.16)`;
     ctx.lineWidth = 1;
     ctx.strokeRect(Math.round(b.x) + 0.5, Math.round(b.y) + 0.5, Math.round(b.w), Math.round(b.h));
 
     const caption = this.input.caption;
     if (!caption) return;
     ctx.textAlign = 'left';
-    ctx.fillStyle = `rgba(${INK},0.55)`;
+    ctx.fillStyle = `rgba(${STYLE.ink},0.55)`;
     ctx.font = `500 13px ${this.fontFamily}`;
     ctx.fillText(caption, b.x, b.y + b.h + 24);
 
@@ -694,7 +692,7 @@ export class Piece {
           : `${s.pauses} ${s.pauses === 1 ? 'pause' : 'pauses'}`
       );
     }
-    ctx.fillStyle = `rgba(${INK},0.36)`;
+    ctx.fillStyle = `rgba(${STYLE.ink},0.36)`;
     ctx.font = `400 12.5px ${this.fontFamily}`;
     ctx.fillText(parts.join(' · '), b.x, b.y + b.h + 43);
   }

@@ -13,7 +13,7 @@
   let profile = $state<Profile | null>(null);
   let status = $state<string | null>(null);
 
-  const CATEGORIES: UpgradeCategory[] = ['craft', 'gates', 'sky'];
+  const CATEGORIES: UpgradeCategory[] = ['craft', 'gates', 'sky', 'piece'];
 
   $effect(() => {
     void (async () => {

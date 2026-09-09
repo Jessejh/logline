@@ -1,5 +1,6 @@
 import { CRAFT_REST, drawCraftBody } from './craft';
 import { BASE_PALETTE, withAlpha, type Palette } from './palette';
+import { BASE_STYLE, type PieceStyle } from './pieceStyle';
 
 /**
  * A still of what a skin actually looks like, for the workshop list. Each one
@@ -11,7 +12,7 @@ import { BASE_PALETTE, withAlpha, type Palette } from './palette';
  * for sale, and the caller decides which palette a preview stands for.
  */
 
-export type PreviewKind = 'craft' | 'gates' | 'sky';
+export type PreviewKind = 'craft' | 'gates' | 'sky' | 'piece';
 
 const STARS = [
   [0.12, 0.22, 0.5],
@@ -38,7 +39,8 @@ function scaleAlpha(color: string, by: number): string {
 export function drawUpgradePreview(
   canvas: HTMLCanvasElement,
   kind: PreviewKind,
-  overrides: Partial<Palette>
+  overrides: Partial<Palette>,
+  style: Partial<PieceStyle> = {}
 ): void {
   const rect = canvas.getBoundingClientRect();
   const w = rect.width || canvas.clientWidth;
@@ -53,6 +55,11 @@ export function drawUpgradePreview(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const pal: Palette = { ...BASE_PALETTE, ...overrides };
+
+  if (kind === 'piece') {
+    drawPiecePreview(ctx, w, h, { ...BASE_STYLE, ...style });
+    return;
+  }
 
   ctx.fillStyle = pal.void;
   ctx.fillRect(0, 0, w, h);
@@ -83,6 +90,70 @@ export function drawUpgradePreview(
 
   if (kind === 'gates') drawGatePreview(ctx, w, h, pal);
   if (kind === 'craft') drawCraftPreview(ctx, w, h, pal);
+}
+
+/**
+ * A scrap of the paper with a day printed on it: two grounds of colour, one
+ * stroke, and a flick of each of its two paints. Small, but made of the style's
+ * own materials, so what is beside the price is the sheet you get.
+ */
+function drawPiecePreview(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  style: PieceStyle
+): void {
+  ctx.fillStyle = style.cool;
+  ctx.fillRect(0, 0, w, h);
+  // Half the sheet in the warmer tone, so a paper shows both its tempers.
+  const warm = ctx.createLinearGradient(0, 0, w, h);
+  warm.addColorStop(0, withAlpha(style.warm, 0));
+  warm.addColorStop(1, withAlpha(style.warm, 1));
+  ctx.fillStyle = warm;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.globalCompositeOperation = style.blend;
+  for (const [cx, cy, hue] of [
+    [0.32, 0.4, '#00bc95'],
+    [0.68, 0.62, '#cd9e4b']
+  ] as const) {
+    const r = w * 0.42;
+    const g = ctx.createRadialGradient(cx * w, cy * h, 0, cx * w, cy * h, r);
+    g.addColorStop(0, withAlpha(hue, style.chroma));
+    g.addColorStop(0.42, withAlpha(hue, style.chroma * 0.6));
+    g.addColorStop(1, withAlpha(hue, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(cx * w - r, cy * h - r, r * 2, r * 2);
+  }
+  ctx.restore();
+
+  // The mark, and one flick of paint off each side of it.
+  ctx.strokeStyle = `rgba(${style.ink},0.72)`;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.18, h * 0.74);
+  ctx.bezierCurveTo(w * 0.36, h * 0.3, w * 0.6, h * 0.86, w * 0.84, h * 0.34);
+  ctx.stroke();
+
+  const flick = (x: number, y: number, dx: number, dy: number, paint: string) => {
+    ctx.fillStyle = withAlpha(paint, 0.85);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + dx * 0.5 - dy * 0.22, y + dy * 0.5 + dx * 0.22, x + dx, y + dy);
+    ctx.quadraticCurveTo(x + dx * 0.5 + dy * 0.22, y + dy * 0.5 - dx * 0.22, x, y);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + dx * 1.28, y + dy * 1.28, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  flick(w * 0.34, h * 0.46, -w * 0.12, -h * 0.2, style.paints[0]);
+  flick(w * 0.68, h * 0.6, w * 0.13, h * 0.18, style.paints[1]);
+
+  ctx.strokeStyle = `rgba(${style.ink},0.2)`;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
 }
 
 /** One four-cell frame with its wall lit, seen straight on. */

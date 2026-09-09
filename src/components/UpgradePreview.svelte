@@ -10,7 +10,7 @@
     const el = canvas;
     const item = upgrade;
     if (!el) return;
-    const paint = () => drawUpgradePreview(el, item.category, item.palette);
+    const paint = () => drawUpgradePreview(el, item.category, item.palette, item.piece);
     // The first paint has to wait for layout to give the canvas a width.
     const raf = requestAnimationFrame(paint);
     addEventListener('resize', paint);

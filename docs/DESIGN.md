@@ -101,7 +101,14 @@ gate is passed the craft glides out on its own.
    - Player can skip track and just keep the journal/logline.
 
 3. **Collection and workshop** (built)
-   Where the gathered material goes, and what showing up buys.
+   Where the gathered material goes, and what showing up buys. Four
+   categories: hull, frames and sky change the flight, and paper
+   changes what the day is printed on — a piece style is a material,
+   never a reading, so every one of them still has to render a flight
+   that held its line and one that ranged wide as two kinds of
+   finished picture. The dark papers print in `screen`, because
+   pigment multiplied into a dark ground only ever subtracts its way
+   to nothing.
    See "The collection pipeline" below. Every item in the workshop
    is pictured by the flight's own renderers — the hull mesh, a gate
    with its wall lit, the sky's wash and stars — rather than by a
@@ -223,9 +230,43 @@ duller and less even than it meant to be.
 
 ### What drives what
 
-- **Hue** — the column taken at each gate. Eight blooms, multiplied
-  into the paper like pigment rather than laid on it as chalk, and
-  clipped to the plate so the result reads as something printed.
+- **Hue** — the colour that was on the cell taken, which is *not* the
+  same thing as which cell it was. Eight blooms, multiplied into the
+  paper like pigment rather than laid on it as chalk, and clipped to
+  the plate so the result reads as something printed.
+
+  A gate deals its four colours as it comes into view and shows them
+  on the wall, so the choice is made with the colour in sight. Which
+  cell holds which is random, every gate, every flight. The four are
+  identical in lightness and chroma — the cells of a gate are the
+  choice actually being made, so one of them being the prettier
+  colour would be paying for an answer.
+
+  This replaces a fixed hue per column, and the reason is worth
+  keeping. "Deep sleep is the teal one" was learnable, and anyone who
+  wanted teal in their picture had a reason to sleep well on paper.
+  Random dealing removes the reason rather than balancing it: there
+  is nothing to learn, so there is nothing to farm. What it costs is
+  real — the ground no longer says *which* answer was given, only
+  that one was, and the answers themselves are read from the summary
+  and the trends. The line's meaning is unchanged.
+
+  The colours are stored on the record, because a random deal cannot
+  be worked out again afterwards.
+
+- **The family** — how the flight is going, and nothing else. A base
+  hue is drawn per flight and turned between gates: barely, on a
+  flight that keeps stopping, so the day comes back as eight
+  neighbours, quiet and close; a long way on one taken fast and
+  unbroken, which throws them across the wheel. Chroma and the
+  within-gate spread ride the same measure.
+
+  It is measured live, from time spent hovering against time spent
+  flying and how hard the craft is being moved, so the colours can
+  only be made of what has already happened. It never reads an
+  answer. Flying fast for louder colours is possible and costs
+  nothing: it changes the picture's temper, not its worth, and the
+  credits are blind to it.
 - **Chroma and paper tone** — how much of the flight was spent
   hovering. A day that kept stopping warms the paper and brings the
   colour up; one taken in a single breath stays cool and graphic.
