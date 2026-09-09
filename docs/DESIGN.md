@@ -382,6 +382,16 @@ deliberate change, not drift:
   becomes a piece — flat by default, with the turnable 3D object one
   tap away. See "The piece" below. Reachable again from the summary
   and from any journal entry.
+- **The camera follows the craft.** The prototype bolted the view to
+  the middle of the gate frame: the craft slid across a world that
+  never moved, which reads as a cursor over a picture rather than
+  something flying through it. The camera now takes two thirds of the
+  craft's position and lags behind it, so the gates, stars and trail
+  shift with you and a swerve throws the craft off-centre before the
+  view gathers it back in. Two thirds rather than all of it, because
+  a locked camera swings the whole gate off the side of a phone at
+  full deflection — and reading the options you are choosing between
+  is the point of that screen.
 - **Steering is relative, not absolute.** The prototype set the
   craft's target straight to the touch point, so putting a thumb down
   anywhere but on the craft threw it across the screen — press near
