@@ -364,6 +364,17 @@ deliberate change, not drift:
   Closing on it, the spot the current heading will touch lights up;
   crossing it punches a hole, and the wall dissolves rather than
   being cut, throwing shards and a shockwave off the puncture.
+
+  Where the crossing counts is load-bearing. `proj` puts a gate at
+  scale 1 when it reaches the camera instead of blowing it up, so at
+  distance 0 the wall is still a frame drawn on the screen ahead of
+  you — answering there fired the punch while the wall was plainly
+  still in front of the craft. The answer is taken at the depth where
+  the gate's projected width reaches the screen width, which is what
+  the eye reads as going through, and the wall holds full strength
+  until then rather than fading on approach. The aim reticle predicts
+  the craft's position at that same depth, so the cell it lights is
+  the cell that gets recorded.
   Answering is the moment the flight makes the most noise about,
   which is the right place for it: it is the only moment that
   records anything.

@@ -58,6 +58,8 @@ const CAM_UP = 150;
 const AIM_HORIZON = 2.0;
 /** Seconds a punched hole takes to open and fade. */
 const BURST_LIFE = 0.62;
+/** Depth behind the camera at which a gate has finished sweeping past and is gone. */
+const GONE_AT = -3.4;
 
 /** World distance of gate `i` from the start of the flight. */
 export function gateZ(i: number): number {
@@ -411,6 +413,25 @@ export class Flight {
     };
   }
 
+  /**
+   * How far past the gate plane the craft has to be before the wall counts as
+   * crossed.
+   *
+   * `proj` puts a gate at scale 1 when it reaches the camera instead of
+   * blowing it up, so at dist 0 the wall is still a frame drawn on the screen
+   * ahead of you — it only reads as going past once it has swept out beyond
+   * the screen edges. Counting the answer at 0 fired the punch while the wall
+   * was plainly still in front of the craft.
+   *
+   * So the crossing is the depth where the gate's projected width reaches the
+   * screen width, which is what the eye uses. Clamped so it always lands
+   * between the gate arriving and the gate being gone.
+   */
+  private passDepth(): number {
+    const d = FOCAL * (this.GW / Math.max(1, this.W) - 1);
+    return Math.max(GONE_AT + 1, Math.min(-0.5, d));
+  }
+
   private proj(d: number): number {
     return FOCAL / (FOCAL + Math.max(d, -3.5));
   }
@@ -482,11 +503,12 @@ export class Flight {
       }
     }
 
+    const pass = this.passDepth();
     for (const g of this.gates) {
       const prev = g.dist;
       g.dist = g.z - this.zDist;
       if (g.flash > 0) g.flash -= dt * 1.7;
-      if (!g.done && prev > 0 && g.dist <= 0) this.capture(g);
+      if (!g.done && prev > pass && g.dist <= pass) this.capture(g);
     }
     this.gates = this.gates.filter((g) => g.dist > -KEEP_BEHIND);
 
@@ -508,7 +530,7 @@ export class Flight {
     this.updateAim();
 
     const lastGate = this.gates[this.gates.length - 1];
-    if (!this.finished && auto && (!lastGate || lastGate.dist < -3.4)) {
+    if (!this.finished && auto && (!lastGate || lastGate.dist < GONE_AT)) {
       this.finished = true;
       this.setHeld(false);
       this.setQuestion(null);
@@ -544,8 +566,12 @@ export class Flight {
    */
   private updateAim(): void {
     const p = this.plane;
-    const gate = this.gates.filter((g) => !g.done && g.dist > -0.2).sort((a, b) => a.dist - b.dist)[0] ?? null;
-    const horizon = gate ? Math.max(0.05, gate.dist / SPEED) : 1.2;
+    const pass = this.passDepth();
+    const gate = this.gates.filter((g) => !g.done && g.dist > pass).sort((a, b) => a.dist - b.dist)[0] ?? null;
+    // Aim at where the craft will be when it crosses, not where it will be
+    // when the gate arrives — otherwise the reticle promises a cell the last
+    // stretch of steering can still change.
+    const horizon = gate ? Math.max(0.05, (gate.dist - pass) / SPEED) : 1.2;
     const simT = Math.min(horizon, AIM_HORIZON);
     const step = 1 / 60;
     let x = p.x;
@@ -646,7 +672,7 @@ export class Flight {
     ctx.globalAlpha = 1;
 
     for (const g of this.gates.slice().sort((a, b) => b.dist - a.dist)) {
-      if (g.dist > -3.4) this.drawGate(g);
+      if (g.dist > GONE_AT) this.drawGate(g);
     }
 
     this.drawProjectedLine();
@@ -876,7 +902,10 @@ export class Flight {
 
     let a = 1;
     if (g.dist > 20) a = Math.max(0, (26 - g.dist) / 6);
-    if (g.dist < 0) a = Math.max(0, 1 + g.dist / 3.4);
+    // Full strength right up to the crossing: a wall that faded on approach
+    // was half gone by the time the craft reached it.
+    const pass = this.passDepth();
+    if (g.dist < pass) a = Math.max(0, (g.dist - GONE_AT) / (pass - GONE_AT));
     if (a <= 0.01) return;
 
     const w = this.GW * s;
@@ -985,7 +1014,7 @@ export class Flight {
     ctx.shadowBlur = 0;
 
     const la = near * a;
-    if (la > 0.06 && g.dist > -0.5) {
+    if (la > 0.06 && g.dist > pass) {
       ctx.globalAlpha = la;
       ctx.fillStyle = PALETTE.label;
       ctx.textAlign = 'center';
