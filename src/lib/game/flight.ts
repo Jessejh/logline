@@ -61,6 +61,27 @@ const BURST_LIFE = 0.62;
 /** Depth behind the camera at which a gate has finished sweeping past and is gone. */
 const GONE_AT = -3.4;
 
+/**
+ * How much of the craft's position the camera takes on. At 0 the camera is
+ * bolted to the middle of the gate frame and the craft slides across a still
+ * world; at 1 it rides the craft exactly and the craft never leaves the centre
+ * of the screen.
+ *
+ * Neither end is right. A still camera makes the craft feel like a cursor over
+ * a picture rather than something flying through it. A locked one swings the
+ * whole gate off the side of a phone at full deflection, which hides the
+ * options you are choosing between — and reading those is the point of the
+ * screen. Two thirds keeps the far column in view at full lock while the world
+ * plainly moves with you.
+ */
+const CAM_FOLLOW = 0.66;
+/**
+ * How fast the camera catches up, per second. Slow enough that a quick swerve
+ * throws the craft off-centre before the view gathers it back in — that lag is
+ * most of what makes the camera read as a camera rather than as a frame.
+ */
+const CAM_LAG = 4.6;
+
 /** World distance of gate `i` from the start of the flight. */
 export function gateZ(i: number): number {
   return FIRST_GATE + i * SPACING;
@@ -163,6 +184,8 @@ export class Flight {
     wingLv: 0,
     wingRv: 0
   };
+  /** Where the view is looking from, in the same space as the craft. */
+  private cam = { x: 0, y: 0 };
   private held = false;
   private pointerId: number | null = null;
   /** Where the thumb went down, and where the craft was aimed at the time. */
@@ -202,6 +225,7 @@ export class Flight {
     this.grabY = this.lastPy;
     this.grabTx = this.plane.tx;
     this.grabTy = this.plane.ty;
+    this.snapCam();
   };
 
   private readonly onPointerDown = (e: PointerEvent) => {
@@ -360,6 +384,7 @@ export class Flight {
     this.pointerId = null;
     this.grabX = this.grabTx = p.tx;
     this.grabY = this.grabTy = p.ty;
+    this.snapCam();
     this.loggedLine = [];
     this.lastLoggedZ = -1;
     this.answers = [];
@@ -432,6 +457,27 @@ export class Flight {
     return Math.max(GONE_AT + 1, Math.min(-0.5, d));
   }
 
+  /** Where the camera belongs for the craft's current position. */
+  private camTarget(): { x: number; y: number } {
+    return {
+      x: this.CX + (this.plane.x - this.CX) * CAM_FOLLOW,
+      y: this.CY + (this.plane.y - this.CY) * CAM_FOLLOW
+    };
+  }
+
+  private snapCam(): void {
+    this.cam = this.camTarget();
+  }
+
+  /**
+   * World to screen. Everything drawn in the flight goes through here: the
+   * gates, the trail, the projected line, the craft and the debris all sit in
+   * one space anchored on the gate frame, and the camera is what moves.
+   */
+  private view(x: number, y: number, s: number): { x: number; y: number } {
+    return { x: this.CX + (x - this.cam.x) * s, y: this.CY + (y - this.cam.y) * s };
+  }
+
   private proj(d: number): number {
     return FOCAL / (FOCAL + Math.max(d, -3.5));
   }
@@ -480,6 +526,11 @@ export class Flight {
     p.pitch += (tPitch - p.pitch) * 6 * dt;
     p.yaw += (tYaw - p.yaw) * 5 * dt;
     this.wings(dt, ay, (p.roll - prevRoll) / dt);
+
+    const target = this.camTarget();
+    const follow = 1 - Math.exp(-CAM_LAG * dt);
+    this.cam.x += (target.x - this.cam.x) * follow;
+    this.cam.y += (target.y - this.cam.y) * follow;
 
     this.zDist += speed * dt;
 
@@ -660,8 +711,7 @@ export class Flight {
     for (const s of this.stars) {
       const k = this.proj(s.d);
       if (k <= 0) continue;
-      const x = CX + s.wx * k;
-      const y = CY + s.wy * k;
+      const { x, y } = this.view(CX + s.wx, CY + s.wy, k);
       if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
       ctx.globalAlpha = Math.min(0.7, k * 1.1) * s.s;
       ctx.fillStyle = PALETTE.star;
@@ -681,9 +731,10 @@ export class Flight {
     this.drawBursts();
 
     for (const s of this.sparks) {
+      const v = this.view(s.x, s.y, 1);
       ctx.globalAlpha = (1 - s.t / 1.1) * 0.8;
       ctx.fillStyle = s.edge ? PALETTE.lamp : PALETTE.ice;
-      ctx.fillRect(s.x - 1.3, s.y - 1.3, 2.6, 2.6);
+      ctx.fillRect(v.x - 1.3, v.y - 1.3, 2.6, 2.6);
     }
     ctx.globalAlpha = 1;
 
@@ -695,7 +746,8 @@ export class Flight {
       ctx.fillStyle = pop.edge ? PALETTE.lamp : '#bfe0e2';
       ctx.font = `500 16px ${this.fontFamily}`;
       ctx.textAlign = 'center';
-      ctx.fillText(pop.text, pop.x, pop.y - k * 54);
+      const v = this.view(pop.x, pop.y, 1);
+      ctx.fillText(pop.text, v.x, v.y - k * 54);
     }
     ctx.globalAlpha = 1;
 
@@ -711,7 +763,7 @@ export class Flight {
    * bottom of the screen. The mirror shows where it goes from there.
    */
   private drawLoggedLine(): void {
-    const { ctx, CX, CY } = this;
+    const { ctx } = this;
     const line = this.loggedLine;
     if (line.length < 2) return;
 
@@ -732,7 +784,8 @@ export class Flight {
       const db = (this.zDist - line[i].z) * TRAIL_K;
       const s = FOCAL / (FOCAL - Math.min(db, TRAIL_REACH));
       const p = this.fromNorm(line[i].nx, line[i].ny);
-      return [CX + (p.x - CX) * s, CY + (p.y - CY) * s + CAM_UP * (s - 1), db];
+      const v = this.view(p.x, p.y, s);
+      return [v.x, v.y + CAM_UP * (s - 1), db];
     };
 
     let i = line.length - 1;
@@ -762,7 +815,7 @@ export class Flight {
    * ending in a reticle on the gate it is about to pass through.
    */
   private drawProjectedLine(): void {
-    const { ctx, CX, CY } = this;
+    const { ctx } = this;
     const { path, gate } = this.aim;
     if (path.length < 2) return;
 
@@ -773,10 +826,8 @@ export class Flight {
     for (let i = 1; i < path.length; i++) {
       const pt = path[i];
       const s = this.proj(pt.d);
-      const x0 = CX + (prev.x - CX) * ps;
-      const y0 = CY + (prev.y - CY) * ps;
-      const x1 = CX + (pt.x - CX) * s;
-      const y1 = CY + (pt.y - CY) * s;
+      const { x: x0, y: y0 } = this.view(prev.x, prev.y, ps);
+      const { x: x1, y: y1 } = this.view(pt.x, pt.y, s);
       ctx.globalAlpha = 0.12 + 0.3 * s;
       ctx.lineWidth = Math.max(0.5, 2.2 * s);
       ctx.setLineDash([4 * s + 1, 6 * s + 2]);
@@ -792,8 +843,7 @@ export class Flight {
     if (gate) {
       // A reticle on the gate plane, at the spot the craft will pass through.
       const s = this.proj(Math.max(0, gate.dist));
-      const x = CX + (this.aim.x - CX) * s;
-      const y = CY + (this.aim.y - CY) * s;
+      const { x, y } = this.view(this.aim.x, this.aim.y, s);
       const r = 4 + 10 * s;
       const pulse = 0.75 + 0.25 * Math.sin(this.time * 5);
       ctx.globalAlpha = (0.35 + 0.5 * s) * pulse;
@@ -828,8 +878,9 @@ export class Flight {
     const bob = (1 - p.throttle) * Math.sin(this.time * 2.1) * 2.5;
     const pose = { roll: p.roll, pitch: p.pitch, yaw: p.yaw, wingL: p.wingL, wingR: p.wingR };
 
+    const v = this.view(p.x, p.y, 1);
     ctx.save();
-    ctx.translate(p.x, p.y + bob);
+    ctx.translate(v.x, v.y + bob);
     ctx.scale(CRAFT_SCALE, CRAFT_SCALE);
 
     // Exhaust while there is power on: a hard-edged flame at the tail and
@@ -910,8 +961,10 @@ export class Flight {
 
     const w = this.GW * s;
     const h = this.GH * s;
-    const x0 = CX - w / 2;
-    const y0 = CY - h / 2;
+    // The gate's own centre, seen from wherever the camera now is.
+    const centre = this.view(CX, CY, s);
+    const x0 = centre.x - w / 2;
+    const y0 = centre.y - h / 2;
     const nx = g.q.cols.length;
     const ny = g.q.type === '2d' ? (g.q.rows?.length ?? 1) : 1;
     const cw = w / nx;
@@ -981,8 +1034,7 @@ export class Flight {
       // closes. Same colour wherever it lands.
       if (aimed && !g.done && g.dist < 7) {
         const t = Math.max(0, 1 - g.dist / 7);
-        const bx = CX + (this.aim.x - CX) * s;
-        const by = CY + (this.aim.y - CY) * s;
+        const { x: bx, y: by } = this.view(this.aim.x, this.aim.y, s);
         const r = Math.max(8, (18 + 60 * t) * s);
         const bloom = ctx.createRadialGradient(bx, by, 0, bx, by, r);
         bloom.addColorStop(0, withAlpha(PALETTE.trailHot, 0.38 * t * t));
@@ -1037,12 +1089,12 @@ export class Flight {
       } else if (g.q.xAxis && g.q.yAxis) {
         const fs = Math.min(17, Math.max(11, w * 0.045));
         ctx.font = `500 ${fs}px ${this.fontFamily}`;
-        ctx.fillText(g.q.yAxis[0], CX, y0 - 8);
-        ctx.fillText(g.q.yAxis[1], CX, y0 + h + fs + 5);
+        ctx.fillText(g.q.yAxis[0], centre.x, y0 - 8);
+        ctx.fillText(g.q.yAxis[1], centre.x, y0 + h + fs + 5);
         ctx.textAlign = 'right';
-        ctx.fillText(g.q.xAxis[0], x0 - 7, CY + fs * 0.36);
+        ctx.fillText(g.q.xAxis[0], x0 - 7, centre.y + fs * 0.36);
         ctx.textAlign = 'left';
-        ctx.fillText(g.q.xAxis[1], x0 + w + 7, CY + fs * 0.36);
+        ctx.fillText(g.q.xAxis[1], x0 + w + 7, centre.y + fs * 0.36);
 
         // Name the aimed cell so a 2D answer reads as an answer, not a spot.
         if (aimed && !g.done && s > 0.45) {
