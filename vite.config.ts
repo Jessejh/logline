@@ -6,11 +6,19 @@ import { VitePWA } from 'vite-plugin-pwa';
 // so production assets need the subpath. Dev stays at the root.
 const PAGES_BASE = '/logline/';
 
+// The minute this build was made, shown on the front page. Distribution is a
+// URL and a service worker, so this is the only way to tell on the phone
+// whether the deploy that just went out is the one you are looking at.
+const BUILD_TIME = new Date().toISOString();
+
 export default defineConfig(({ mode }) => ({
   base: mode === 'production' ? PAGES_BASE : '/',
   build: {
     target: 'es2022',
     sourcemap: true
+  },
+  define: {
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME)
   },
   plugins: [
     svelte(),
