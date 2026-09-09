@@ -1,3 +1,4 @@
+import { craftTail, drawCraftBody } from './craft';
 import { PALETTE, withAlpha } from './palette';
 import { QUESTIONS } from './questions';
 import type { Answer, FlightResult, LinePoint, Question } from './types';
@@ -37,13 +38,13 @@ const STEER_GAIN = 1.35;
  * prototype's size all of that is a few pixels of flicker. Big enough to enjoy
  * is the point of the number.
  *
- * The ceiling is the gate. Measured at 390px wide, 2.6 puts the craft about
- * two cells across at a full-size gate — wide, but the answer is read off the
- * lit cell and the reticle rather than the silhouette, and the body's centre
- * stays plainly inside one opening. Going much past this starts hiding the
- * labels themselves, which is where it would actually cost something.
+ * The ceiling is the gate. Measured at 390px wide, 3.4 fills most of the grid
+ * height as the gate arrives — the answer is read off the lit cell, the
+ * reticle and the label row rather than the silhouette, and the body's centre
+ * stays plainly inside one opening. Going much past this starts covering the
+ * label row itself, which is where it would actually cost something.
  */
-const CRAFT_SCALE = 2.6;
+const CRAFT_SCALE = 3.4;
 
 /** How long a passed gate is kept around — the mirror watches it recede. */
 const KEEP_BEHIND = 48;
@@ -55,6 +56,8 @@ const TRAIL_REACH = FOCAL * 0.74;
 const CAM_UP = 150;
 /** How far ahead the aim is simulated, in seconds. Steering settles well before. */
 const AIM_HORIZON = 2.0;
+/** Seconds a punched hole takes to open and fade. */
+const BURST_LIFE = 0.62;
 
 /** World distance of gate `i` from the start of the flight. */
 export function gateZ(i: number): number {
@@ -93,6 +96,16 @@ interface Spark {
   vy: number;
   t: number;
   edge: boolean;
+}
+
+/**
+ * The hole punched in a gate's wall. Screen-space, because it is over as fast
+ * as it appears and the gate it belongs to is already behind the camera.
+ */
+interface Burst {
+  x: number;
+  y: number;
+  t: number;
 }
 
 interface Aim {
@@ -164,6 +177,7 @@ export class Flight {
   private stars: Star[] = [];
   private pops: Pop[] = [];
   private sparks: Spark[] = [];
+  private bursts: Burst[] = [];
   private answers: Answer[] = [];
   private aim: Aim = { gate: null, x: 0, y: 0, ix: 0, iy: 0, path: [] };
 
@@ -349,6 +363,7 @@ export class Flight {
     this.answers = [];
     this.pops = [];
     this.sparks = [];
+    this.bursts = [];
     this.zDist = 0;
     this.time = 0;
     this.finished = false;
@@ -487,6 +502,9 @@ export class Flight {
     }
     this.sparks = this.sparks.filter((s) => s.t < 1.1);
 
+    for (const b of this.bursts) b.t += dt;
+    this.bursts = this.bursts.filter((b) => b.t < BURST_LIFE);
+
     this.updateAim();
 
     const lastGate = this.gates[this.gates.length - 1];
@@ -568,18 +586,21 @@ export class Flight {
     this.answers.push({ q: g.q.q, label, item: g.q.items[ix], edge, refined, ix, iy });
     this.pops.push({ text: `+ ${g.q.items[ix]}`, x: this.plane.x, y: this.plane.y - 68, t: 0, edge });
 
-    for (let i = 0; i < 18; i++) {
+    // Shards of the wall, thrown wider across it than along the flight path.
+    for (let i = 0; i < 26; i++) {
       const a = Math.random() * Math.PI * 2;
-      const sp = 50 + Math.random() * 140;
+      const sp = 60 + Math.random() * 200;
       this.sparks.push({
         x: this.plane.x,
         y: this.plane.y,
-        vx: Math.cos(a) * sp,
-        vy: Math.sin(a) * sp,
+        vx: Math.cos(a) * sp * 1.5,
+        vy: Math.sin(a) * sp * 0.8,
         t: 0,
         edge
       });
     }
+
+    this.bursts.push({ x: this.plane.x, y: this.plane.y, t: 0 });
 
     // The wings flick as the gate passes.
     this.plane.wingLv += 2.4;
@@ -630,6 +651,8 @@ export class Flight {
 
     this.drawProjectedLine();
     this.drawLoggedLine();
+
+    this.drawBursts();
 
     for (const s of this.sparks) {
       ctx.globalAlpha = (1 - s.t / 1.1) * 0.8;
@@ -777,58 +800,21 @@ export class Flight {
     const { ctx } = this;
     const p = this.plane;
     const bob = (1 - p.throttle) * Math.sin(this.time * 2.1) * 2.5;
-
-    const cr = Math.cos(p.roll);
-    const sr = Math.sin(p.roll);
-    const cp = Math.cos(p.pitch);
-    const sp = Math.sin(p.pitch);
-    const cy = Math.cos(p.yaw);
-    const sy = Math.sin(p.yaw);
-    const camT = 0.5;
-    const ct = Math.cos(camT);
-    const st = Math.sin(camT);
-
-    // Local frame: x right, y up, z forward. Roll, then pitch, then yaw.
-    const pt = (x: number, y: number, z: number): [number, number] => {
-      const x1 = x * cr + y * sr;
-      const y1 = -x * sr + y * cr;
-      const y2 = y1 * cp + z * sp;
-      const z2 = z * cp - y1 * sp;
-      const x3 = x1 * cy + z2 * sy;
-      const z3 = -x1 * sy + z2 * cy;
-      const k = 1 / (1 + z3 * 0.012);
-      return [x3 * k, -(y2 * ct + z3 * st) * k];
-    };
-
-    const nose = pt(0, 0, 29);
-    const tail = pt(0, 0, -11);
-    const finTop = pt(0, 8, -9);
-    const finFwd = pt(0, 1, 2);
-    const wl = 21;
-    const rootL = pt(-3.5, 0, 7);
-    const rootLb = pt(-3.5, 0, -8);
-    const tipL = pt(-wl * Math.cos(p.wingL), wl * Math.sin(p.wingL), -5);
-    const rootR = pt(3.5, 0, 7);
-    const rootRb = pt(3.5, 0, -8);
-    const tipR = pt(wl * Math.cos(p.wingR), wl * Math.sin(p.wingR), -5);
+    const pose = { roll: p.roll, pitch: p.pitch, yaw: p.yaw, wingL: p.wingL, wingR: p.wingR };
 
     ctx.save();
     ctx.translate(p.x, p.y + bob);
     ctx.scale(CRAFT_SCALE, CRAFT_SCALE);
 
-    // Exhaust while there is power on. Deliberately not grown in step with the
-    // craft: a plume that scaled proportionally became a warm smear wide enough
-    // to wash out the gate behind it, and the shape of the craft is the thing
-    // worth looking at.
+    // Exhaust while there is power on: a hard-edged flame at the tail and
+    // nothing more. The soft plume this replaces read as a smear of light
+    // under the craft rather than as thrust, and at this size it covered the
+    // gate behind.
     if (p.throttle > 0.03) {
+      const tail = craftTail(pose);
       const flame = p.throttle * (0.8 + 0.2 * Math.sin(this.time * 37));
-      const g = ctx.createRadialGradient(tail[0], tail[1], 0, tail[0], tail[1], 10 + 6 * flame);
-      g.addColorStop(0, `rgba(232,184,122,${0.4 * flame})`);
-      g.addColorStop(1, 'rgba(232,184,122,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(tail[0] - 18, tail[1] - 18, 36, 36);
-      ctx.strokeStyle = `rgba(255,220,170,${0.7 * flame})`;
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = withAlpha(PALETTE.lamp, 0.75 * flame);
+      ctx.lineWidth = 1.4;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(tail[0], tail[1]);
@@ -839,69 +825,48 @@ export class Flight {
     ctx.shadowColor = PALETTE.craftGlow;
     // Blur is in the scaled space, so this is multiplied by CRAFT_SCALE. Held
     // down from the old value to stop the halo washing out the gate behind.
-    ctx.shadowBlur = 16;
-
-    const wing = (root: [number, number], rootB: [number, number], tip: [number, number], lift: number) => {
-      const shade = 0.72 + 0.28 * Math.max(0, Math.sin(lift) + 0.4);
-      ctx.fillStyle = withAlpha(PALETTE.craft, Math.min(1, shade));
-      ctx.beginPath();
-      ctx.moveTo(root[0], root[1]);
-      ctx.lineTo(tip[0], tip[1]);
-      ctx.lineTo(rootB[0], rootB[1]);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = withAlpha(PALETTE.craft, 0.45);
-      ctx.lineWidth = 0.7;
-      ctx.beginPath();
-      ctx.moveTo(root[0], root[1]);
-      ctx.lineTo(tip[0], tip[1]);
-      ctx.stroke();
-    };
-    // Far wing first so the near one overlaps it under bank.
-    if (p.roll >= 0) {
-      wing(rootL, rootLb, tipL, p.wingL);
-      wing(rootR, rootRb, tipR, p.wingR);
-    } else {
-      wing(rootR, rootRb, tipR, p.wingR);
-      wing(rootL, rootLb, tipL, p.wingL);
-    }
-
-    ctx.fillStyle = PALETTE.craft;
-    ctx.beginPath();
-    ctx.moveTo(nose[0], nose[1]);
-    ctx.lineTo(rootR[0], rootR[1]);
-    ctx.lineTo(tail[0], tail[1]);
-    ctx.lineTo(rootL[0], rootL[1]);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = withAlpha(PALETTE.craft, 0.85);
-    ctx.beginPath();
-    ctx.moveTo(tail[0], tail[1]);
-    ctx.lineTo(finTop[0], finTop[1]);
-    ctx.lineTo(finFwd[0], finFwd[1]);
-    ctx.closePath();
-    ctx.fill();
-
-    // Spine and leading edges are what sell the depth on a small shape.
+    ctx.shadowBlur = 12;
+    drawCraftBody(ctx, pose, PALETTE);
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(74,143,160,0.6)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(nose[0], nose[1]);
-    ctx.lineTo(tail[0], tail[1]);
-    ctx.stroke();
-
-    ctx.strokeStyle = 'rgba(168,213,216,0.4)';
-    ctx.lineWidth = 0.7;
-    ctx.beginPath();
-    ctx.moveTo(nose[0], nose[1]);
-    ctx.lineTo(rootR[0], rootR[1]);
-    ctx.moveTo(nose[0], nose[1]);
-    ctx.lineTo(rootL[0], rootL[1]);
-    ctx.stroke();
 
     ctx.restore();
+  }
+
+  /** The hole: a shockwave off the puncture and the blown-out flare inside it. */
+  private drawBursts(): void {
+    const { ctx } = this;
+    for (const b of this.bursts) {
+      const k = b.t / BURST_LIFE;
+      const ease = 1 - (1 - k) * (1 - k);
+      const fade = (1 - k) * (1 - k);
+
+      ctx.globalAlpha = fade * 0.8;
+      ctx.strokeStyle = PALETTE.trailHot;
+      ctx.lineWidth = Math.max(1, 10 * (1 - k));
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 26 + ease * 320, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // A second ring just behind the first, so the wall reads as sheet
+      // rather than as a single hoop.
+      ctx.globalAlpha = fade * 0.45;
+      ctx.lineWidth = Math.max(0.8, 4 * (1 - k));
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 8 + ease * 170, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (k < 0.4) {
+        const f = 1 - k / 0.4;
+        const r = 30 + 80 * f;
+        const flare = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
+        flare.addColorStop(0, withAlpha(PALETTE.ice, 0.55 * f));
+        flare.addColorStop(1, withAlpha(PALETTE.ice, 0));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = flare;
+        ctx.fillRect(b.x - r, b.y - r, r * 2, r * 2);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   private drawGate(g: Gate): void {
@@ -950,6 +915,53 @@ export class Flight {
       ctx.strokeStyle = withAlpha(PALETTE.trailHot, 0.45 + 0.4 * near);
       ctx.lineWidth = Math.max(0.8, 1.6 * s);
       ctx.strokeRect(ax + 1, ay + 1, cw - 2, ch - 2);
+    }
+
+    // The gate is a membrane rather than an opening — filaments of light
+    // strung across the whole frame, identical in every cell so the wall
+    // never says one answer is worth more than another. Passing through
+    // dissolves it: `flash` runs 1 to 0 over the punch.
+    const wall = g.done ? Math.max(0, g.flash) : 1;
+    if (wall > 0.01 && h > 2) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, y0, w, h);
+      ctx.clip();
+
+      const sheet = ctx.createLinearGradient(0, y0, 0, y0 + h);
+      sheet.addColorStop(0, withAlpha(PALETTE.ice, 0.02 * wall));
+      sheet.addColorStop(0.5, withAlpha(PALETTE.teal, (0.06 + 0.06 * near) * wall));
+      sheet.addColorStop(1, withAlpha(PALETTE.ice, 0.02 * wall));
+      ctx.fillStyle = sheet;
+      ctx.fillRect(x0, y0, w, h);
+
+      // Spacing is a fraction of the gate, so the filaments hold still in
+      // the frame as it comes closer instead of crawling.
+      const gap = Math.max(3, h / 22);
+      const drift = this.reduced ? 0 : ((this.time * 0.3) % 1) * gap;
+      ctx.strokeStyle = withAlpha(PALETTE.trailHot, (0.05 + 0.14 * near) * wall);
+      ctx.lineWidth = Math.max(0.4, 0.9 * s);
+      ctx.beginPath();
+      for (let y = y0 + drift - gap; y < y0 + h; y += gap) {
+        ctx.moveTo(x0, y);
+        ctx.lineTo(x0 + w, y);
+      }
+      ctx.stroke();
+
+      // Where the current heading will touch the wall, lighting up as it
+      // closes. Same colour wherever it lands.
+      if (aimed && !g.done && g.dist < 7) {
+        const t = Math.max(0, 1 - g.dist / 7);
+        const bx = CX + (this.aim.x - CX) * s;
+        const by = CY + (this.aim.y - CY) * s;
+        const r = Math.max(8, (18 + 60 * t) * s);
+        const bloom = ctx.createRadialGradient(bx, by, 0, bx, by, r);
+        bloom.addColorStop(0, withAlpha(PALETTE.trailHot, 0.38 * t * t));
+        bloom.addColorStop(1, withAlpha(PALETTE.trailHot, 0));
+        ctx.fillStyle = bloom;
+        ctx.fillRect(bx - r, by - r, r * 2, r * 2);
+      }
+      ctx.restore();
     }
 
     ctx.lineWidth = Math.max(0.5, s);

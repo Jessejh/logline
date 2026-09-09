@@ -1,4 +1,4 @@
-import { BASE_PALETTE, type Palette } from '../game/palette';
+import type { Palette } from '../game/palette';
 
 /**
  * What credits buy.
@@ -112,12 +112,4 @@ export function paletteFor(equipped: Equipped): Partial<Palette> {
     if (upgrade) Object.assign(out, upgrade.palette);
   }
   return out;
-}
-
-/** A single swatch per upgrade, for the shop list. Falls back to the base. */
-export function swatchFor(upgrade: Upgrade): string {
-  const p = upgrade.palette;
-  if (upgrade.category === 'craft') return p.craft ?? BASE_PALETTE.craft;
-  if (upgrade.category === 'gates') return p.ice ?? BASE_PALETTE.ice;
-  return p.star ?? BASE_PALETTE.star;
 }
