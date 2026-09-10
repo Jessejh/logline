@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { QUESTIONS } from '../lib/game/questions';
+  import { QUESTIONS, colorOf } from '../lib/game/questions';
   import type { Entry } from '../lib/storage/entries';
   import type { Award } from '../lib/storage/profile';
   import LineMini from './LineMini.svelte';
@@ -14,9 +14,6 @@
     onJournal: () => void;
     onCollection: () => void;
   } = $props();
-
-  const raw = $derived(entry.answers.filter((a) => !a.refined).length);
-  const refined = $derived(entry.answers.length - raw);
 
   // Every question the flight met, answered or not. A question flown over is
   // part of the record — dropping it from the list would make the day look
@@ -37,7 +34,9 @@
     <div class="row">
       <span class="q">{row.q}</span>
       {#if row.answer}
-        <span class="a" class:edge={row.answer.edge}>{row.answer.label}</span>
+        <span class="a" class:edge={row.answer.edge}>
+          <i class="swatch" style="background: {colorOf(row.answer)}"></i>{row.answer.label}
+        </span>
       {:else}
         <span class="a open">left open</span>
       {/if}
@@ -47,16 +46,7 @@
   <div class="lines">
     <p class="caption">The line you drew</p>
     <LineMini line={entry.line} />
-    <button class="small quiet turn" onclick={onArtwork}>Turn it in 3D</button>
-  </div>
-
-  <div class="haul">
-    <p class="caption">Gathered — {raw} raw, {refined} refined</p>
-    <div class="chips">
-      {#each entry.answers as answer (answer.q)}
-        <span class="chip {answer.refined ? 'ref' : 'raw'}">{answer.item}</span>
-      {/each}
-    </div>
+    <button class="small quiet turn" onclick={onArtwork}>See the piece</button>
   </div>
 
   {#if award}
@@ -103,10 +93,6 @@
 
   .turn {
     margin-top: 10px;
-  }
-
-  .haul {
-    margin-top: 20px;
   }
 
   .a.open {

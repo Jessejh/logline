@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { summarise, tallyMaterials, trends } from '../lib/progress/collection';
+  import { summarise, trends } from '../lib/progress/collection';
   import { rateFor, longestStreak } from '../lib/progress/credits';
   import { listEntries } from '../lib/storage/entries';
   import { loadProfile, streakNow, type Profile } from '../lib/storage/profile';
@@ -11,7 +11,6 @@
   let streak = $state(0);
   let best = $state(0);
   let series = $state<ReturnType<typeof trends>>([]);
-  let materials = $state<ReturnType<typeof tallyMaterials>>([]);
   let totals = $state<ReturnType<typeof summarise> | null>(null);
   let loading = $state(true);
 
@@ -22,7 +21,6 @@
       streak = await streakNow();
       best = longestStreak(entries.map((e) => e.day));
       series = trends(entries);
-      materials = tallyMaterials(entries);
       totals = summarise(entries);
       loading = false;
     })();
@@ -69,19 +67,6 @@
       {/each}
     </section>
 
-    <section>
-      <p class="caption">
-        Materials — {totals.materials} gathered, {totals.distinctMaterials} kinds
-      </p>
-      <div class="tally">
-        {#each materials as material (material.item)}
-          <span class="chip {material.refined ? 'ref' : 'raw'}">
-            {material.item}
-            <b>{material.count}</b>
-          </span>
-        {/each}
-      </div>
-    </section>
   {/if}
 
   <div class="actions">
@@ -131,17 +116,5 @@
 
   section {
     margin-top: 28px;
-  }
-
-  .tally {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .tally .chip b {
-    color: var(--bright);
-    font-weight: 600;
-    margin-left: 4px;
   }
 </style>

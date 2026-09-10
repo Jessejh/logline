@@ -12,7 +12,7 @@ Two lines define the entire experience:
    and drops away beneath you; in the rear-view mirror it converges
    toward a vanishing point. This is the record. At the end of a
    session, a miniature of this line *is* the journal entry — a drawn
-   shape of your day — and the whole line can be turned in 3D.
+   shape of your day.
 
 2. **The projected line** (ahead of you) — a dashed, fading line
    showing where you'll go if you keep your current heading, ending
@@ -83,15 +83,15 @@ gate is passed the craft glides out on its own.
    reticle says so before it happens: off the grid it opens into a
    dashed ring and names itself.
 
-   Each gate answered drops one named material, shown in a popup.
+   Each gate answered gives up one named colour, shown in a popup —
+   after it has been gone through, never before.
 
    The logged line draws behind you as you fly. The projected line
    points ahead and lights the cell it will land in. A rear-view
    mirror at the top of the screen shows the line and the passed
-   gates receding, each with its chosen cell lit. At session end, the
-   shape of the logged line is the visual signature of this day's
-   entry, first shown as a 3D piece — the line threaded through the
-   eight frames — that can be turned with a thumb.
+   gates receding, each holding the colour it gave up. At session
+   end, the shape of the logged line is the visual signature of this
+   day's entry, shown as a piece drawn flat on paper.
 
 2. **Track phase** (not built yet)
    Answers assemble into a procedural track. Precision-flying phase.
@@ -130,11 +130,6 @@ lines that exist during flight, just viewed from outside the cockpit.
 
 ## The collection pipeline
 
-Every gate drops exactly one named material, and always has. What
-was missing was anywhere for it to go: materials were visible only
-inside the entry that produced them, so eight a day accumulated
-into nothing you could look at. Three pieces close that.
-
 **Credits come from gates.** A completed flight pays
 `gates × rate`, where the rate rises with the streak — three per
 gate on day one, climbing by one per consecutive day to a cap of
@@ -163,10 +158,10 @@ does not have. This carries the village's rule forward: unlocks and
 atmosphere, never advantage.
 
 **Reading the accumulation.** The collection screen shows the
-streak, the balance, a per-question trend across the last fortnight,
-and a running tally of every material gathered. The trends plot the
-column index as it is — no day is ranked, nothing is called good.
-It is a shape to notice, not a score to beat.
+streak, the balance, and a per-question trend across the last
+fortnight. The trends plot the column index as it is — no day is
+ranked, nothing is called good. It is a shape to notice, not a score
+to beat.
 
 The balance lives in its own store rather than being recomputed
 from the journal, so deleting an entry does not confiscate what it
@@ -178,12 +173,41 @@ The record drawn flat, with the depth thrown away. Two layers, two
 meanings: **the ground is what you answered, the line is how you
 moved.**
 
-The 3D object threads the line through eight frames, which reads the
-*answers* well but needs turning before "did I wander today" is
-visible at all. Dropping z makes that the first thing you see — a
-short mark, or a tangle. The object is still there behind a toggle;
-it is the better reading of the answers, and the flat piece is the
-better reading of the flying.
+Dropping z makes "did I wander today" the first thing you see — a
+short mark, or a tangle.
+
+The ground is one band per question, laid in the order the gates were
+met and painted in the colour each gave up. A question flown over
+paints nothing and leaves its band as bare paper: a rest in the
+composition, and the only honest way to draw an answer that was never
+given.
+
+Bands replaced the blooms that came before them, and they keep the
+rule below more plainly than blooms ever did. Every band is the same
+width wherever it falls, so no answer takes more of the picture than
+another and the eight are always evenly divided however the craft was
+flown — where blooms needed a sliding compromise between the flown
+position and a formal ring to stop a calm day mixing itself to mud.
+
+Which way they run is decided by the mark: across its long axis, so
+the line crosses the colours instead of running along inside one and
+touching two of them all day. Both arrangements are the same picture
+differently laid out — this picks an arrangement, never a better one.
+
+Each band holds flat across almost all its width and ramps out over a
+narrow overlap with its neighbour, where the two ramps cross at half
+strength and sum back to one. The sheet is covered evenly, two
+colours genuinely bleed where they meet, and the bands still read as
+eight bands you can count off in order. That overlap is the whole
+balance: wide, and the ground is one continuous wash where nothing
+can be told apart; absent, and it reads as a chart rather than paint.
+
+**The 3D object is gone.** It threaded the line through the eight
+frames and read the *answers* well, but it had to be turned before it
+said anything about the flying, and the flat piece says both at once.
+Keeping a second reading behind a toggle cost a screen, a renderer
+and a decision at the end of every flight, for a view that was the
+better one at nothing.
 
 ### The rule this has to keep
 
@@ -199,7 +223,7 @@ The first build got this wrong and is worth recording. Drawn at a
 fixed scale with the blooms placed where the craft was, a flight that
 held its line came out as a ten-pixel dash in a brown smudge — all
 eight blooms stacked on one spot and mixed to mud. That reads as
-*nothing happened*, not as restraint. Two fixes:
+*nothing happened*, not as restraint. The fix that survives:
 
 - **The mark always fills its frame.** The record's own bounds are
   fitted to the plate, capped at 7× so a motionless flight is not
@@ -208,25 +232,36 @@ eight blooms stacked on one spot and mixed to mud. That reads as
   ranged is still legible — it is carried by the *shape* of the mark
   and by the ground, which is where it belongs, rather than by the
   mark being too small to see.
-- **The blooms compose when there is nothing to follow.** Placement
-  slides from the flown position toward a formal ring as movement
-  falls away. Where there is a shape, follow it; where there is none,
-  compose. Restraint comes out ordered rather than empty.
 
-The same discipline covers the palette: four hues, one per column, at
-equal lightness and chroma so no cell is a prettier cell to land in.
-These are now solved rather than picked — same hue angles, every one
-placed at L* 68 and C* 50 in Lab, which is the sharpest chroma all
-four can reach in sRGB while staying identical in weight. The
-hand-picked set they replace spanned L* 66 to 74, so it was both
-duller and less even than it meant to be.
+The second fix, sliding the blooms toward a formal ring as movement
+fell away, went with the blooms. Bands cannot stack on one spot, so
+the problem it solved no longer exists.
+
+The same discipline covers the palette. All thirty-two colours — four
+per gate — are solved rather than picked: every one sits at L* 85 and
+C* 21.5 in Lab, so they differ only in hue angle. Weight is what the
+eye ranks colours by, and equal weight is what makes wanting a
+particular one unable to bend an answer. Within a gate the four are a
+quarter-turn apart so the options are plainly different; each gate is
+offset an eighth of that from the last, so no two of the thirty-two
+repeat.
+
+One lightness for all of them does a second job: it fixes how well
+the ink reads over the ground. At L* 85 the faintest stroke lands at
+1.55:1 against the band beneath it and the heaviest at 2.34:1 — both
+better than the same strokes managed on bare paper before the bands
+existed, and, because the lightness never varies, *identical* on the
+last colour and the first. A hand-picked set could only approximate
+that; 21.5 is the sharpest chroma every hue can reach at that
+lightness while staying inside sRGB.
 
 ### What drives what
 
-- **Hue** — the column taken at each gate. Eight blooms, multiplied
-  into the paper like pigment rather than laid on it as chalk, and
-  clipped to the plate so the result reads as something printed.
-- **Chroma and paper tone** — how much of the flight was spent
+- **Hue** — the colour the gate gave up for the column taken. Eight
+  bands in the order they were collected, multiplied into the paper
+  like pigment rather than laid on it as chalk, and clipped to the
+  plate so the result reads as something printed.
+- **Band strength and paper tone** — how much of the flight was spent
   hovering. A day that kept stopping warms the paper and brings the
   colour up; one taken in a single breath stays cool and graphic.
   The floor is high: never stopping is a different temper, not a
@@ -323,6 +358,10 @@ load-bearing elsewhere.
   on low stretches; light returns when things lift. Arguably
   prettier, not broken.
 
+The materials this describes no longer exist anywhere in the app —
+gates give up colours now, and colours buy nothing. The bullets stay
+because the reasoning does.
+
 The symmetric-mix idea in the second bullet is the thing worth
 keeping: it is how the village would have made a hard week and a
 good week equally productive. Credits reach the same end by a
@@ -337,8 +376,11 @@ means reopening that, not assuming it.
 
 ## Resource-farming risk
 
-If raw materials feel scarcer or more interesting, players start
-answering dishonestly. Yields must stay symmetric. Check in soft
+If one cell's yield feels scarcer or more interesting, players start
+answering dishonestly. Yields must stay symmetric. This is why the
+colours are solved to one lightness and one chroma rather than
+chosen, and why a gate reveals nothing before it is flown: a colour
+you can see coming is a colour you can steer for. Check in soft
 launch: watch answer-distribution drift over a user's first month.
 
 ## Rejected ideas
@@ -374,7 +416,7 @@ Canvas rendering with perspective projection (not real 3D). The
 logged line (permanent trail converging to a vanishing point), the
 projected line (dashed trajectory from current velocity), the
 3D-ambiguous craft with roll/pitch, starfield, 8 questions across 1D
-and 2D gates, item pickups, and the summary where the logged line
+and 2D gates, colour pickups, and the summary where the logged line
 becomes the entry.
 
 Around it: a journal of past flights held on the device, the
@@ -458,9 +500,18 @@ deliberate change, not drift:
   which is the right place for it: it is the only moment that
   records anything.
 - **The artwork.** After the flight, before the summary, the record
-  becomes a piece — flat by default, with the turnable 3D object one
-  tap away. See "The piece" below. Reachable again from the summary
-  and from any journal entry.
+  becomes a piece, drawn flat on paper. See "The piece" below.
+  Reachable again from the summary and from any journal entry.
+- **Gates give up a colour, and only on the way out.** Each cell
+  holds a named colour, and the wall says nothing about which until
+  it is behind you: the cells are identical light on approach, and
+  the frame, the shards and the cell taken turn that colour as the
+  gate sweeps past. The name pops where the material name used to.
+  Showing the colours on approach would be handing over a reason to
+  pick a cell that has nothing to do with the question — which is
+  the same failure as scoring the answers, arriving by way of the
+  art. The mirror keeps them, so the flight accumulates a ribbon of
+  what has been collected without ever previewing what is ahead.
 - **The camera follows the craft.** The prototype bolted the view to
   the middle of the gate frame: the craft slid across a world that
   never moved, which reads as a cursor over a picture rather than

@@ -19,7 +19,10 @@ and why. Don't re-propose rejected ideas.
 - Grid answer options use even counts (4, not 3 or 5). No neutral
   middle.
 - Edge answers: visually distinctive, never worth more than middle.
-  Same item drop rate and count at every position.
+  Same yield at every position.
+- A gate never shows what colour a cell holds before it has been
+  flown through. A colour you can see coming is a colour you can
+  steer for, which bends the answer underneath.
 - No village decay. Answers only unlock or add atmosphere.
 - No therapy/treatment/diagnosis language anywhere — code comments,
   commit messages, UI strings, store copy. Use "reflection,"
@@ -58,27 +61,35 @@ of that: hold-to-fly (the thumb is the throttle), the aimed cell lit
 on the next gate, gates as walls of light that are punched through
 rather than passed, the trail drawn behind the craft, a rear-view
 mirror, a 3D craft with hinged wings (`src/lib/game/craft.ts`, shared
-with the workshop's previews), and a 3D artwork of the logged line
-after each flight (`src/lib/game/artwork.ts`). Also
-built: the journal (past flights, on-device), export/import, offline,
-and home-screen install.
+with the workshop's previews). Also built: the journal (past flights,
+on-device), export/import, offline, and home-screen install.
+
+Gates give up **colours**, not materials — materials are gone
+entirely. Each cell holds one of thirty-two named colours, all solved
+to L* 85 / C* 21.5 so none is prettier to land in and the ink reads
+the same over every one. A gate shows nothing on approach; going
+through it turns the frame, the shards and the cell taken that
+colour, and pops its name where the material name used to.
 
 After each flight the record becomes a piece: the line drawn flat on
-paper, the ground coloured by the answers, the ink weighted by how
-fast the craft was moved, and a ring wherever the thumb came off. The
-3D object is still there behind a toggle. `docs/DESIGN.md` has a
-section on it — read "The rule this has to keep" before changing
-anything there, because a straight flight and a wandering one must
-stay two kinds of good picture, never a better and a worse one.
-`LinePoint` now carries a clock and `ENTRY_VERSION` is 2.
+paper over one band per question, laid in the order the gates were
+met and painted in the colour each gave up — a question flown over
+leaves its band bare. Bands run across the mark's long axis. The ink
+is weighted by how fast the craft was moved, with a ring wherever the
+thumb came off. There is no 3D view of the flight any more.
+`docs/DESIGN.md` has a section on all of it — read "The rule this has
+to keep" before changing anything there, because a straight flight
+and a wandering one must stay two kinds of good picture, never a
+better and a worse one. `LinePoint` carries a clock and
+`ENTRY_VERSION` is 3.
 
 The collection pipeline is closed. Gates pay credits, the streak
 raises the per-gate rate, the first flight of a local day is the one
 that pays, and credits buy appearance-only upgrades (hull, frames,
 sky) in the workshop. The collection screen shows the streak, the
-balance, a per-question trend over the last fortnight, and a tally
-of every material gathered. Rules live in `src/lib/progress/`,
-persistence in `src/lib/storage/profile.ts`.
+balance, and a per-question trend over the last fortnight. Rules live
+in `src/lib/progress/`, persistence in
+`src/lib/storage/profile.ts`.
 
 `prototypes/grading-phase.html` stays as the feel reference. It is
 frozen — fix the port, not the prototype, and don't let the two drift

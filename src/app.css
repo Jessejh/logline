@@ -195,28 +195,15 @@ button.small {
   color: var(--lamp);
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip {
-  font-size: 14px;
-  padding: 6px 11px;
-  border-radius: 2px;
-  border: 1px solid rgba(45, 107, 122, 0.45);
-  color: var(--ice);
-}
-
-.chip.raw {
-  border-color: rgba(123, 107, 154, 0.55);
-  color: #b0a0c8;
-}
-
-.chip.ref {
-  border-color: rgba(232, 184, 122, 0.4);
-  color: #dfc090;
+/* The colour that answer gave up, shown beside it — the same one the piece
+   lays its band in. */
+.swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: baseline;
 }
 
 .note {

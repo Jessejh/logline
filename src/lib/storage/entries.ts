@@ -2,8 +2,12 @@ import { computeStats, findPauses, type FlightStats } from '../game/stats';
 import type { Answer, FlightResult, LinePoint } from '../game/types';
 import { all, ENTRIES, put, remove } from './db';
 
-/** 2 added a clock on each line point and the flight statistics. */
-export const ENTRY_VERSION = 2;
+/**
+ * 2 added a clock on each line point and the flight statistics. 3 replaced the
+ * material each cell dropped with the colour it gives up — older answers carry
+ * neither, and `colorOf` resolves their colour from the question instead.
+ */
+export const ENTRY_VERSION = 3;
 
 export interface Entry {
   /** Unique per flight, not per day — flying twice keeps both records. */

@@ -4,9 +4,9 @@ A line drawn through the day.
 
 Mobile-only game that turns daily reflection into flight. Answer
 questions by steering through them — the line behind you is the
-record, the line ahead is where you're pointing. Gather materials
-from each answer, build a village that grows from what you bring
-home.
+record, the line ahead is where you're pointing. Each gate you go
+through gives up a colour, and the day's line is drawn over the
+colours you collected.
 
 Design history and decisions: [`docs/DESIGN.md`](docs/DESIGN.md).
 Picking this up in Claude Code: read [`CLAUDE.md`](CLAUDE.md) first.
@@ -23,7 +23,8 @@ What works today:
 - The logged line and projected line, the lit cell you are on course
   for, a rear-view mirror, and the summary where the logged line
   becomes the journal entry.
-- The line turned in 3D after each flight, and again from the journal.
+- The piece drawn after each flight, and again from the journal: the
+  line on paper over a band of colour per question.
 - A journal of past flights, stored on the device, with JSON export
   and import.
 - Offline use and home-screen install.

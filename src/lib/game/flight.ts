@@ -1,7 +1,7 @@
 import { craftTail, drawCraftBody } from './craft';
 import { PALETTE, withAlpha } from './palette';
 import { QUESTIONS } from './questions';
-import type { Answer, FlightResult, LinePoint, Question } from './types';
+import type { Answer, FlightResult, GateColor, LinePoint, Question } from './types';
 import { visibleHeight, visibleWidth } from '../viewport';
 
 /**
@@ -116,6 +116,14 @@ interface Gate {
   /** Met by going round it rather than through it. */
   skipped: boolean;
   pick: { ix: number; iy: number } | null;
+  /**
+   * The colour taken, and null until it has been. A gate gives nothing away
+   * about what its cells hold on the way in: the wall is the same light in
+   * every opening, and the colour arrives only once it is behind you. Showing
+   * it first would be handing the player a reason to pick a cell that has
+   * nothing to do with the question.
+   */
+  color: GateColor | null;
   flash: number;
 }
 
@@ -131,9 +139,12 @@ interface Pop {
   x: number;
   y: number;
   t: number;
-  edge: boolean;
-  /** A gate left open says so plainly, without the flourish of a find. */
-  quiet: boolean;
+  /**
+   * The colour just taken, written in itself. Null for a gate left open, which
+   * says so plainly and without the flourish of a find — the two have to cost
+   * the same, so neither may look like the better outcome.
+   */
+  tint: string | null;
 }
 
 interface Spark {
@@ -142,7 +153,7 @@ interface Spark {
   vx: number;
   vy: number;
   t: number;
-  edge: boolean;
+  tint: string;
 }
 
 /**
@@ -153,6 +164,7 @@ interface Burst {
   x: number;
   y: number;
   t: number;
+  tint: string;
 }
 
 interface Aim {
@@ -467,6 +479,7 @@ export class Flight {
       done: false,
       skipped: false,
       pick: null,
+      color: null,
       flash: 0
     }));
     this.stars = [];
@@ -883,8 +896,7 @@ export class Flight {
         x: this.plane.x,
         y: this.plane.y - 68,
         t: 0,
-        edge: false,
-        quiet: true
+        tint: null
       });
       navigator.vibrate?.(6);
       return;
@@ -899,20 +911,24 @@ export class Flight {
 
     const nx = g.q.cols.length;
     const edge = ix === 0 || ix === nx - 1;
-    const refined = ix >= nx / 2;
     const label =
       g.q.type === '2d' && g.q.xAxis && g.q.yAxis && g.q.rows
         ? `${g.q.xAxis[ix < nx / 2 ? 0 : 1]} / ${g.q.yAxis[iy < g.q.rows.length / 2 ? 0 : 1]}`
         : g.q.cols[ix];
 
-    this.answers.push({ q: g.q.q, gate: g.n, label, item: g.q.items[ix], edge, refined, ix, iy });
+    // Going through is what develops the colour. Everything below is the gate
+    // giving it up on the way out — the name, the shards, the frame it leaves
+    // behind in the mirror.
+    const color = g.q.colors[ix];
+    g.color = color;
+
+    this.answers.push({ q: g.q.q, gate: g.n, label, color: color.name, hex: color.hex, edge, ix, iy });
     this.pops.push({
-      text: `+ ${g.q.items[ix]}`,
+      text: color.name,
       x: this.plane.x,
       y: this.plane.y - 68,
       t: 0,
-      edge,
-      quiet: false
+      tint: color.hex
     });
 
     // Shards of the wall, thrown wider across it than along the flight path.
@@ -925,11 +941,11 @@ export class Flight {
         vx: Math.cos(a) * sp * 1.5,
         vy: Math.sin(a) * sp * 0.8,
         t: 0,
-        edge
+        tint: color.hex
       });
     }
 
-    this.bursts.push({ x: this.plane.x, y: this.plane.y, t: 0 });
+    this.bursts.push({ x: this.plane.x, y: this.plane.y, t: 0, tint: color.hex });
 
     // The wings flick as the gate passes.
     this.plane.wingLv += 2.4;
@@ -996,7 +1012,7 @@ export class Flight {
     for (const s of this.sparks) {
       const v = this.view(s.x, s.y, 1);
       ctx.globalAlpha = (1 - s.t / 1.1) * 0.8;
-      ctx.fillStyle = s.edge ? PALETTE.lamp : PALETTE.ice;
+      ctx.fillStyle = s.tint;
       ctx.fillRect(v.x - 1.3, v.y - 1.3, 2.6, 2.6);
     }
     ctx.globalAlpha = 1;
@@ -1010,7 +1026,7 @@ export class Flight {
     for (const pop of this.pops) {
       const k = pop.t / 2.3;
       ctx.globalAlpha = k < 0.12 ? k / 0.12 : Math.max(0, (1 - k) * 1.5);
-      ctx.fillStyle = pop.quiet ? PALETTE.label : pop.edge ? PALETTE.lamp : '#bfe0e2';
+      ctx.fillStyle = pop.tint ?? PALETTE.label;
       ctx.font = `500 16px ${this.fontFamily}`;
       ctx.textAlign = 'center';
       const v = this.view(pop.x, pop.y, 1);
@@ -1226,8 +1242,8 @@ export class Flight {
         const f = 1 - k / 0.4;
         const r = 30 + 80 * f;
         const flare = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
-        flare.addColorStop(0, withAlpha(PALETTE.ice, 0.55 * f));
-        flare.addColorStop(1, withAlpha(PALETTE.ice, 0));
+        flare.addColorStop(0, withAlpha(b.tint, 0.55 * f));
+        flare.addColorStop(1, withAlpha(b.tint, 0));
         ctx.globalAlpha = 1;
         ctx.fillStyle = flare;
         ctx.fillRect(b.x - r, b.y - r, r * 2, r * 2);
@@ -1271,7 +1287,9 @@ export class Flight {
         const isEdge = i === 0 || i === nx - 1 || (ny > 1 && (j === 0 || j === ny - 1));
         const picked = g.pick?.ix === i && g.pick?.iy === j;
         let fill = isEdge ? 'rgba(232,184,122,0.05)' : 'rgba(45,107,122,0.04)';
-        if (picked && g.flash > 0) fill = `rgba(232,184,122,${0.3 * g.flash})`;
+        // The cell that was gone through, holding the colour it gave up: bright
+        // as it is punched, then settling to a stain the mirror keeps.
+        if (picked && g.color) fill = withAlpha(g.color.hex, 0.14 + 0.34 * Math.max(0, g.flash));
         ctx.fillStyle = fill;
         ctx.fillRect(x0 + i * cw, y0 + j * ch, cw, ch);
       }
@@ -1337,8 +1355,12 @@ export class Flight {
       ctx.restore();
     }
 
+    // Once a gate has been gone through it stops being ice and becomes the
+    // colour it gave up — which is the only moment any of this is ever shown.
+    const taken = g.color?.hex ?? PALETTE.ice;
+
     ctx.lineWidth = Math.max(0.5, s);
-    ctx.strokeStyle = withAlpha(PALETTE.ice, (0.18 + 0.25 * near) * 0.8);
+    ctx.strokeStyle = withAlpha(taken, (0.18 + 0.25 * near) * 0.8);
     ctx.beginPath();
     for (let i = 1; i < nx; i++) {
       ctx.moveTo(x0 + i * cw, y0);
@@ -1351,8 +1373,8 @@ export class Flight {
     ctx.stroke();
 
     ctx.lineWidth = Math.max(0.8, 2 * s);
-    ctx.strokeStyle = withAlpha(PALETTE.ice, 0.28 + 0.4 * near);
-    ctx.shadowColor = 'rgba(45,107,122,0.8)';
+    ctx.strokeStyle = withAlpha(taken, 0.28 + 0.4 * near);
+    ctx.shadowColor = g.color ? withAlpha(g.color.hex, 0.8) : 'rgba(45,107,122,0.8)';
     ctx.shadowBlur = 14 * s;
     ctx.strokeRect(x0, y0, w, h);
     ctx.shadowBlur = 0;
@@ -1465,7 +1487,7 @@ export class Flight {
       if (s < 0.05) continue;
       const fade = Math.min(1, s * 2.2);
       ctx.globalAlpha = 0.35 * fade;
-      ctx.strokeStyle = PALETTE.ice;
+      ctx.strokeStyle = g.color?.hex ?? PALETTE.ice;
       ctx.lineWidth = Math.max(0.5, 1.2 * s);
       ctx.strokeRect(Math.min(x0, x1), y0, Math.abs(x1 - x0), y1 - y0);
       if (g.pick) {
@@ -1474,7 +1496,7 @@ export class Flight {
         const [ax0, ay0] = at(g.pick.ix / nx, g.pick.iy / ny, db);
         const [ax1, ay1] = at((g.pick.ix + 1) / nx, (g.pick.iy + 1) / ny, db);
         ctx.globalAlpha = 0.55 * fade;
-        ctx.fillStyle = PALETTE.lamp;
+        ctx.fillStyle = g.color?.hex ?? PALETTE.lamp;
         ctx.fillRect(Math.min(ax0, ax1), ay0, Math.abs(ax1 - ax0), ay1 - ay0);
       }
     }

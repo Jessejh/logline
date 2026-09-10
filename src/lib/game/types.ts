@@ -1,5 +1,11 @@
 export type GateType = '1d' | '2d';
 
+/** A named colour a cell gives up. Solved to equal weight — see `questions.ts`. */
+export interface GateColor {
+  name: string;
+  hex: string;
+}
+
 export interface Question {
   /** The prompt shown above the gate. */
   q: string;
@@ -10,8 +16,12 @@ export interface Question {
   rows?: string[];
   xAxis?: readonly [string, string];
   yAxis?: readonly [string, string];
-  /** One named material per column. */
-  items: string[];
+  /**
+   * One named colour per column, never shown before the gate is behind you —
+   * a wall that advertised its colours would have the player flying for a
+   * palette instead of answering.
+   */
+  colors: GateColor[];
   kind?: 'meta';
 }
 
@@ -25,11 +35,16 @@ export interface Answer {
   gate?: number;
   /** Human-readable answer, e.g. "Deep" or "Calm / Heavy". */
   label: string;
-  item: string;
+  /**
+   * The colour this cell gave up, kept on the record so a piece still draws
+   * the ground it was drawn with if the questions are ever edited. Absent on
+   * records written before colours replaced materials — `colorOf` resolves
+   * those from the question table instead.
+   */
+  color?: string;
+  hex?: string;
   /** Outermost column or row. Flavour only — never worth more. */
   edge: boolean;
-  /** Upper half of the scale, which yields refined rather than raw material. */
-  refined: boolean;
   ix: number;
   iy: number;
 }

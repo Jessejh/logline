@@ -1,18 +1,18 @@
-import { QUESTIONS } from './questions';
+import { QUESTIONS, colorOf } from './questions';
 import { findPauses, lateralSpeeds, type FlightStats } from './stats';
 import type { Answer, LinePoint } from './types';
 import { visibleHeight, visibleWidth } from '../viewport';
 
 /**
  * The flight seen flat: the whole record collapsed onto the gate plane, with
- * the depth thrown away.
- *
- * The 3D object threads the line through eight frames, which reads the
- * *answers* well but needs turning before "did I wander today" becomes visible
- * at all. Dropping z makes that the first thing you see — a short mark, or a
- * tangle — and leaves two clean layers with two separate meanings:
+ * the depth thrown away. Two layers, two separate meanings:
  *
  *   the ground is what you answered,   the line is how you moved.
+ *
+ * The ground is one band per question, laid in the order the gates were met
+ * and painted in the colour each gave up. A question flown over paints
+ * nothing and leaves its band as bare paper — a rest in the composition, and
+ * the only honest way to draw an answer that was not given.
  *
  * ## The rule this file exists to keep
  *
@@ -24,9 +24,15 @@ import { visibleHeight, visibleWidth } from '../viewport';
  * answers underneath. So movement does not add beauty here; it changes school.
  * Sparse and few-coloured, or dense and layered — both are finished pieces.
  *
- * The same discipline covers the palette: the four hues are picked to sit at
- * about the same lightness and chroma, so no cell is prettier to land in than
- * its neighbour.
+ * Bands keep that rule more plainly than the blooms they replace ever did.
+ * Every band is the same width wherever it falls, so no answer takes up more
+ * of the picture than another, and the eight are always evenly divided
+ * however the craft was flown.
+ *
+ * The same discipline covers the palette: all thirty-two colours are solved to
+ * one lightness and one chroma, so no cell is prettier to land in than its
+ * neighbour — and the ink reads exactly as well on every one of them. See
+ * `questions.ts`.
  */
 
 export interface PieceInput {
@@ -36,16 +42,6 @@ export interface PieceInput {
   /** Shown small under the piece. */
   caption?: string;
 }
-
-/**
- * One hue per column of a gate, deliberately equal in weight — see the note
- * above. These four are solved rather than picked: same hue angles as before,
- * but every one placed at L* 68 and C* 50 in Lab, the sharpest chroma all four
- * can reach in sRGB while staying identical in weight. Matched to two decimal
- * places, so no answer is a prettier answer — which the old hand-picked set,
- * spanning L* 66 to 74, only approximated.
- */
-const HUES = ['#00bc95', '#14affe', '#cd9e4b', '#f281b7'];
 
 /**
  * The two paints that separate out of a fast throw. Deliberately *not* the
@@ -128,13 +124,6 @@ interface Throw {
   drops: { at: number; r: number; off: number }[];
 }
 
-interface Bloom {
-  x: number;
-  y: number;
-  hue: string;
-  weight: number;
-}
-
 export class Piece {
   private readonly cvs: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -149,6 +138,16 @@ export class Piece {
   private box = { x: 0, y: 0, w: 0, h: 0 };
   /** Magnification and centring that fit the mark to its frame. */
   private fit = { k: 1, cx: 0.5, cy: 0.5 };
+  /**
+   * Which way the bands run. The mark decides: they are laid across its long
+   * axis, so the line crosses the colours instead of running along inside one
+   * and touching two of them all day.
+   *
+   * Both answers are the same picture differently arranged — this picks an
+   * arrangement, never a better one, which is the rule at the top of the file
+   * applied to the ground.
+   */
+  private vertical = true;
   private fontFamily = 'system-ui, sans-serif';
   private grain: HTMLCanvasElement | null = null;
   /** Built once per layout: the geometry is fixed by the record. */
@@ -273,6 +272,7 @@ export class Piece {
       cx: (minX + maxX) / 2,
       cy: (minY + maxY) / 2
     };
+    this.vertical = maxX - minX >= maxY - minY;
   }
 
   private at(nx: number, ny: number): { x: number; y: number } {
@@ -284,57 +284,19 @@ export class Piece {
   }
 
   /**
-   * One bloom per gate, in the hue of the column that was taken.
+   * One slot per question, in the order the gates were met, holding the colour
+   * that gate gave up — or null where the question was flown over.
    *
-   * Where it sits depends on how much there was to go on. A flight that ranged
-   * about puts each bloom where the craft actually was as that gate went by, so
-   * the colour is laid down at the place the answer was given. A flight that
-   * held its line has no such geometry — every gate happened at nearly the same
-   * spot — and placing eight blooms on top of each other mixes them to a brown
-   * smudge, which is the ugliest possible reading of a calm day.
-   *
-   * So the placement slides toward a formal ring as the movement falls away.
-   * Where there is a shape to follow, follow it; where there is none, compose
-   * instead. Restraint comes out ordered rather than empty, and no two hues are
-   * forced to muddy each other.
+   * Indexed by the answer's own gate rather than by its place in the list, so a
+   * record that left questions open keeps its colours against the eight instead
+   * of sliding them all forward.
    */
-  private blooms(): Bloom[] {
-    const { line, answers } = this.input;
-    if (line.length === 0) return [];
-    const out: Bloom[] = [];
-    const n = answers.length;
-    const organic = clamp01(this.busy * 1.6);
-    // Pushed out far enough that neighbouring petals sit beside each other
-    // rather than on top of each other.
-    const ringR = 0.34;
-
-    for (let i = 0; i < n; i++) {
-      const a = answers[i];
-      // Gates are evenly spaced along the record, so an answer's own gate says
-      // where in the flight it was given. Dividing the record by the number of
-      // answers instead would drag every bloom forward on a flight that left
-      // questions open.
-      const share = ((a.gate ?? i) + 1) / QUESTIONS.length;
-      const idx = Math.min(line.length - 1, Math.round(share * (line.length - 1)));
-      const p = line[idx];
-
-      // Clockwise from the top, so the ring reads in the order they were asked.
-      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
-      const formalX = 0.5 + Math.cos(angle) * ringR;
-      const formalY = 0.5 + Math.sin(angle) * ringR;
-
-      const flown = this.at(p.nx, p.ny);
-      const formal = {
-        x: this.box.x + formalX * this.box.w,
-        y: this.box.y + formalY * this.box.h
-      };
-      out.push({
-        x: formal.x + (flown.x - formal.x) * organic,
-        y: formal.y + (flown.y - formal.y) * organic,
-        hue: HUES[Math.max(0, Math.min(HUES.length - 1, a.ix))],
-        weight: 1
-      });
-    }
+  private slots(): (string | null)[] {
+    const out: (string | null)[] = Array.from({ length: QUESTIONS.length }, () => null);
+    this.input.answers.forEach((answer, i) => {
+      const slot = answer.gate ?? i;
+      if (slot >= 0 && slot < out.length) out[slot] = colorOf(answer);
+    });
     return out;
   }
 
@@ -374,52 +336,68 @@ export class Piece {
     void stats;
   }
 
-  /** The wash of answer-hues the line sits on. */
+  /**
+   * The bands of answer-colour the line sits on, in the order they were taken.
+   *
+   * Each band holds its colour flat across almost all of its width and ramps
+   * out over a narrow overlap with its neighbour, where the two ramps cross at
+   * half strength each and sum back to one. So the sheet is covered evenly,
+   * two colours genuinely bleed where they meet rather than butting at a ruled
+   * edge, and the bands still read as eight bands you can count off in order.
+   *
+   * The overlap is the whole balance: wide, and the ground turns into one
+   * continuous wash where nothing can be told apart; absent, and it reads as a
+   * chart rather than as paint.
+   */
   private drawGround(): void {
     const { ctx } = this;
-    const blooms = this.blooms();
-    if (blooms.length === 0) return;
+    const slots = this.slots();
+    if (slots.every((hex) => hex === null)) return;
 
     // Pausing is what makes the colour come up. Never stopping leaves a piece
     // that is cooler and more graphic rather than a piece that is washed out —
     // the floor is high enough that colour is always properly present.
-    const chroma = 0.36 + 0.34 * this.stillness;
-    // A wandering flight lays its blooms far apart and needs a wide field for
-    // them to meet at all. A calm one stacks them in the formal ring, where a
-    // field that wide simply multiplies eight hues through each other into a
-    // grey wash — the same mixing-to-mud failure the ring was introduced to
-    // solve, arriving by the other road. So the quiet end gets tighter, more
-    // separate petals, and reads as a deliberate rosette rather than a haze.
-    const spread = this.box.w * (0.21 + 0.42 * this.busy);
+    const strength = 0.62 + 0.18 * this.stillness;
+    const n = slots.length;
+    const vertical = this.vertical;
+    const lo0 = vertical ? this.box.x : this.box.y;
+    const hi0 = lo0 + (vertical ? this.box.w : this.box.h);
+    const thickness = (hi0 - lo0) / n;
 
     ctx.save();
     // Held inside the frame, so the result reads as something printed on a
-    // sheet. Unclipped, the blooms tint the whole screen and the border stops
+    // sheet. Unclipped, the bands tint the whole screen and the border stops
     // meaning anything.
     ctx.beginPath();
     ctx.rect(this.box.x, this.box.y, this.box.w, this.box.h);
     ctx.clip();
-    // Multiply, so the hues sink into the paper like pigment rather than
+    // Multiply, so the colours sink into the paper like pigment rather than
     // sitting on it as chalk. Alpha-blended pastels on a light ground go
     // chalky and, where they overlap, grey.
     ctx.globalCompositeOperation = 'multiply';
-    for (const b of blooms) {
-      const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, spread * b.weight);
-      // Held near full out to the middle of its reach and then dropped, so a
-      // bloom reads as a field of colour with an edge rather than as haze. The
-      // old even falloff spent most of its radius near zero, which is what
-      // made the ground look washed rather than printed.
-      g.addColorStop(0, rgbaFromHex(b.hue, chroma));
-      g.addColorStop(0.4, rgbaFromHex(b.hue, chroma * 0.55));
-      g.addColorStop(0.75, rgbaFromHex(b.hue, chroma * 0.14));
-      g.addColorStop(1, rgbaFromHex(b.hue, 0));
+
+    const feather = thickness * 0.12;
+
+    for (let i = 0; i < n; i++) {
+      const hex = slots[i];
+      if (!hex) continue;
+      const centre = lo0 + (i + 0.5) * thickness;
+      // The outermost bands run flat to the edge of the sheet rather than
+      // fading into a margin the others do not have.
+      const lo = i === 0 ? lo0 : centre - thickness / 2 - feather;
+      const hi = i === n - 1 ? hi0 : centre + thickness / 2 + feather;
+      const span = hi - lo;
+      const at = (x: number) => clamp01((x - lo) / span);
+      const g = vertical
+        ? ctx.createLinearGradient(lo, 0, hi, 0)
+        : ctx.createLinearGradient(0, lo, 0, hi);
+      g.addColorStop(0, rgbaFromHex(hex, i === 0 ? strength : 0));
+      g.addColorStop(at(centre - thickness / 2 + feather), rgbaFromHex(hex, strength));
+      g.addColorStop(at(centre + thickness / 2 - feather), rgbaFromHex(hex, strength));
+      g.addColorStop(1, rgbaFromHex(hex, i === n - 1 ? strength : 0));
       ctx.fillStyle = g;
-      ctx.fillRect(
-        b.x - spread * b.weight,
-        b.y - spread * b.weight,
-        spread * b.weight * 2,
-        spread * b.weight * 2
-      );
+      if (vertical) ctx.fillRect(lo, this.box.y, span, this.box.h);
+      else ctx.fillRect(this.box.x, lo, this.box.w, span);
     }
     ctx.restore();
   }
@@ -462,7 +440,11 @@ export class Piece {
       // fast everywhere, and letting that thin the whole mark to a whisper
       // would make the liveliest days the faintest pictures.
       const width = (1.1 + 1.9 * (1 - speed)) * scale;
-      const alpha = 0.17 + 0.15 * (1 - speed);
+      // Carried by the ground, not by taste: the bands are a solved lightness,
+      // so one pair of numbers holds the line at the same legibility over every
+      // colour in the set — the faintest stroke on the deepest band still reads
+      // better than it did on bare paper before the bands existed.
+      const alpha = 0.22 + 0.18 * (1 - speed);
 
       ctx.beginPath();
       const p0 = this.at(line[from].nx, line[from].ny);

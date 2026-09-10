@@ -3,7 +3,7 @@
  *
  * One rule holds this file together: **the award is blind to the answers.**
  * It reads how many gates were met and how many days in a row have been
- * logged. It never reads a cell index, an edge flag or a refined flag, and it
+ * logged. It never reads a cell index, an edge flag or a colour, and it
  * must stay that way — the moment an answer is worth more than its neighbour,
  * people answer for credits and the journal stops being a record of anything.
  * `docs/DESIGN.md` calls this the resource-farming risk; this is where it is

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { colorOf } from '../lib/game/questions';
   import { exportEntries, importEntries } from '../lib/storage/backup';
   import { isDurable } from '../lib/storage/db';
   import { listEntries, removeEntry, type Entry } from '../lib/storage/entries';
@@ -91,16 +92,13 @@
           {#each entry.answers as answer (answer.q)}
             <div class="row">
               <span class="q">{answer.q}</span>
-              <span class="a" class:edge={answer.edge}>{answer.label}</span>
+              <span class="a" class:edge={answer.edge}>
+                <i class="swatch" style="background: {colorOf(answer)}"></i>{answer.label}
+              </span>
             </div>
           {/each}
-          <div class="chips">
-            {#each entry.answers as answer (answer.q)}
-              <span class="chip {answer.refined ? 'ref' : 'raw'}">{answer.item}</span>
-            {/each}
-          </div>
           <div class="actions tight">
-            <button class="small quiet" onclick={() => onView(entry)}>Turn it in 3D</button>
+            <button class="small quiet" onclick={() => onView(entry)}>See the piece</button>
             <button class="small quiet danger" onclick={() => onDelete(entry)}>Delete entry</button>
           </div>
         </div>
@@ -172,10 +170,6 @@
 
   .detail {
     margin-top: 12px;
-  }
-
-  .detail .chips {
-    margin-top: 14px;
   }
 
   .danger {
