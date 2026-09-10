@@ -25,8 +25,9 @@ What works today:
   becomes the journal entry.
 - The piece drawn after each flight, and again from the journal: the
   line on paper over a band of colour per question.
-- A journal of past flights, stored on the device, with JSON export
-  and import.
+- A journal of past flights, stored on the device, read as a calendar
+  — one month at a time, one weekday grid per question — with JSON
+  export and import.
 - Offline use and home-screen install.
 
 ## Running it

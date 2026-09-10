@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { colorOf } from '../lib/game/questions';
+  import { firstFlightPerDay, monthByQuestion } from '../lib/progress/collection';
   import { exportEntries, importEntries } from '../lib/storage/backup';
   import { isDurable } from '../lib/storage/db';
   import { listEntries, removeEntry, type Entry } from '../lib/storage/entries';
+  import Calendar from './Calendar.svelte';
   import InstallHint from './InstallHint.svelte';
-  import LineMini from './LineMini.svelte';
 
   let { onBack, onChanged, onView }: {
     onBack: () => void;
@@ -13,10 +13,32 @@
   } = $props();
 
   let entries = $state<Entry[]>([]);
-  let openId = $state<string | null>(null);
   let status = $state<string | null>(null);
   let durable = $state(true);
   let fileInput = $state<HTMLInputElement | null>(null);
+
+  const now = new Date();
+  let year = $state(now.getFullYear());
+  let month = $state(now.getMonth());
+  /** Which calendar the open day was tapped in, so the detail opens in place. */
+  let openIn = $state<number | null>(null);
+  let openDay = $state<string | null>(null);
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+  const monthFormat = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' });
+  const dayFormat = new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  });
+
+  const months = $derived(monthByQuestion(entries, year, month));
+  const byDay = $derived(new Map(firstFlightPerDay(entries).map((e) => [e.day, e])));
+  const openEntry = $derived(openDay ? (byDay.get(openDay) ?? null) : null);
+  /** No flying ahead of time: the month after this one is not a place to go. */
+  const atLatest = $derived(year === now.getFullYear() && month === now.getMonth());
 
   async function refresh() {
     entries = await listEntries();
@@ -28,12 +50,23 @@
     void refresh();
   });
 
-  const dayFormat = new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short'
-  });
-  const timeFormat = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
+  function step(by: number) {
+    const d = new Date(year, month + by, 1);
+    year = d.getFullYear();
+    month = d.getMonth();
+    openIn = null;
+    openDay = null;
+  }
+
+  function select(index: number, day: string) {
+    if (openIn === index && openDay === day) {
+      openIn = null;
+      openDay = null;
+      return;
+    }
+    openIn = index;
+    openDay = day;
+  }
 
   async function onExport() {
     try {
@@ -63,7 +96,8 @@
   async function onDelete(entry: Entry) {
     if (!confirm('Delete this entry? It is only on this device.')) return;
     await removeEntry(entry.id);
-    if (openId === entry.id) openId = null;
+    openIn = null;
+    openDay = null;
     status = 'Entry deleted.';
     await refresh();
   }
@@ -74,37 +108,44 @@
 
   {#if entries.length === 0}
     <p class="caption">No entries yet. Fly once and today's line lands here.</p>
-  {/if}
-
-  {#each entries as entry (entry.id)}
-    <div class="entry">
+  {:else}
+    <div class="nav">
+      <button class="small quiet" onclick={() => step(-1)} aria-label="Previous month">‹</button>
+      <span class="month">{monthFormat.format(new Date(year, month, 1))}</span>
       <button
-        class="head"
-        aria-expanded={openId === entry.id}
-        onclick={() => (openId = openId === entry.id ? null : entry.id)}
+        class="small quiet"
+        onclick={() => step(1)}
+        disabled={atLatest}
+        aria-label="Next month">›</button
       >
-        <span class="date">{dayFormat.format(entry.ts)}</span>
-        <span class="time">{timeFormat.format(entry.ts)}</span>
-      </button>
-      <LineMini line={entry.line} height={40} />
-      {#if openId === entry.id}
+    </div>
+
+    {#each months as calendar, i (calendar.q)}
+      <Calendar
+        month={calendar}
+        today={today}
+        selected={openIn === i ? openDay : null}
+        onSelect={(day) => select(i, day)}
+      />
+
+      {#if openIn === i && openEntry && openDay}
         <div class="detail">
-          {#each entry.answers as answer (answer.q)}
-            <div class="row">
-              <span class="q">{answer.q}</span>
-              <span class="a" class:edge={answer.edge}>
-                <i class="swatch" style="background: {colorOf(answer)}"></i>{answer.label}
-              </span>
-            </div>
-          {/each}
+          <p class="when">{dayFormat.format(openEntry.ts)}</p>
+          <p class="said">
+            {calendar.weeks
+              .flat()
+              .find((cell) => cell.day === openDay)?.label ?? 'left open'}
+          </p>
           <div class="actions tight">
-            <button class="small quiet" onclick={() => onView(entry)}>See the piece</button>
-            <button class="small quiet danger" onclick={() => onDelete(entry)}>Delete entry</button>
+            <button class="small quiet" onclick={() => onView(openEntry)}>See the piece</button>
+            <button class="small quiet danger" onclick={() => onDelete(openEntry)}>
+              Delete entry
+            </button>
           </div>
         </div>
       {/if}
-    </div>
-  {/each}
+    {/each}
+  {/if}
 
   <div class="keeping">
     <p class="caption">Keeping these</p>
@@ -140,36 +181,45 @@
 </div>
 
 <style>
-  .entry {
-    margin-bottom: 18px;
-  }
-
-  .head {
+  .nav {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: baseline;
-    width: 100%;
-    border: none;
-    border-bottom: 1px solid rgba(45, 107, 122, 0.22);
-    padding: 8px 0;
-    margin-bottom: 8px;
-    color: var(--ice);
-    text-align: left;
+    gap: 10px;
+    margin-bottom: 20px;
   }
 
-  .date {
+  .month {
     font-family: var(--serif);
-    font-size: 16px;
+    font-size: 17px;
     color: var(--bright);
   }
 
-  .time {
-    font-size: 12.5px;
-    color: var(--dim);
+  .nav button {
+    min-width: 44px;
+  }
+
+  .nav button:disabled {
+    opacity: 0.3;
   }
 
   .detail {
-    margin-top: 12px;
+    margin: -14px 0 26px;
+    padding: 12px 14px;
+    border: 1px solid rgba(45, 107, 122, 0.35);
+    border-radius: 2px;
+  }
+
+  .when {
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--bright);
+  }
+
+  .said {
+    margin-top: 2px;
+    font-size: 14px;
+    color: var(--mid);
   }
 
   .danger {

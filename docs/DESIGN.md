@@ -117,8 +117,9 @@ The village phase that used to sit at position 3 is parked — see
 The app has two faces for the user, expressed through the line metaphor:
 
 - **Logline** (the journal/reflection) — the logged line from each
-  day, stored, browsable. Each day's entry is the visual shape of
-  the line plus the answer breakdown plus gathered materials.
+  day, stored, browsable. The journal proper is a calendar of where
+  the answers sat; each day opens to its piece and its answers. See
+  "The journal as a calendar".
   
 - **Projected line** (the todo/plan) — future-facing. In aviation
   terms, this is the flight plan / preflight checklist. Tasks,
@@ -166,6 +167,65 @@ to beat.
 The balance lives in its own store rather than being recomputed
 from the journal, so deleting an entry does not confiscate what it
 earned. Pruning the journal has to stay safe.
+
+## The journal as a calendar
+
+The journal used to be a reverse-chronological list of entries, which
+answered "what did I say on Tuesday" and nothing else. Reading a month
+meant opening a month. So it is a calendar now: one weekday grid per
+question, a month at a time, each day painted by where that day's
+answer sat on that question's scale. Tapping a day opens it in place —
+the date, that question's answer, its piece, and delete.
+
+The day shown is the day's **first** flight, matching the flight that
+credits pay for and the flight the trends plot. A second flight is
+kept in full and reachable from the day it belongs to; it just does
+not overwrite the day's colour.
+
+Three states, and the difference between the last two is the whole
+point of the design:
+
+- **Answered** — filled with its step on the ramp.
+- **Flown over** — an outline holding an empty cell. The same reading
+  the piece gives a question left open: a rest, not a gap.
+- **No flight** — the date in quiet grey. A month with holes in it
+  must not read as a month of failures.
+
+### The ramp, and why it is not red-to-green
+
+Red and green would say *bad* and *good*. Nothing here is allowed to
+say that, and it is not squeamishness: the journal is only worth
+keeping if the answers in it are honest, and an encoding that calls
+one end of a scale the better end is an argument to give that answer
+tomorrow. "Sore" to "Alive" is a real axis, but which end anyone wants
+to be at on a given day is theirs to decide, not the app's to colour
+in. This is the resource-farming risk again, arriving through the
+journal instead of through the flight.
+
+So the ramp is **sequential in a single hue** — the standard encoding
+for magnitude, and the only kind that carries no verdict. Four steps
+rising in lightness against the near-black screen, all at hue 207°,
+the app's own teal. Lighter means further along the scale and nothing
+else.
+
+The labels finish the job. Every calendar names both ends in the
+question's own words, and lighter is "Deep" under one question and
+"Restless" under another — desirable in the first, not obviously so in
+the second. Brightness therefore cannot settle into meaning *good*
+across the screen, because it does not point the same way twice.
+
+The four steps are solved and then checked, the same discipline the
+gate colours get. Lightness is monotonic — L* 41, 60, 78, 95 — which
+is what makes the ramp readable as an order at all. Adjacent steps sit
+at worst ΔE 15.6 apart for normal vision and 13.7 under protanopia, so
+no two are confusable, and the darkest holds 3.22:1 against the
+background, which is what keeps a low answer plainly a filled cell
+rather than an empty one.
+
+Note what this ramp is *not* used for: it never appears during a
+flight. A scale colour is a retrospective reading, and a gate that
+showed one on approach would be previewing the answer's worth at the
+one moment that could bend it.
 
 ## The piece
 

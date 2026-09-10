@@ -23,6 +23,10 @@ and why. Don't re-propose rejected ideas.
 - A gate never shows what colour a cell holds before it has been
   flown through. A colour you can see coming is a colour you can
   steer for, which bends the answer underneath.
+- No encoding anywhere may say one end of a scale is the better end.
+  Never red-to-green. The journal's scale ramp is one hue rising in
+  lightness, and both ends are always labelled in the question's own
+  words — see "The ramp, and why it is not red-to-green".
 - No village decay. Answers only unlock or add atmosphere.
 - No therapy/treatment/diagnosis language anywhere — code comments,
   commit messages, UI strings, store copy. Use "reflection,"
@@ -61,8 +65,15 @@ of that: hold-to-fly (the thumb is the throttle), the aimed cell lit
 on the next gate, gates as walls of light that are punched through
 rather than passed, the trail drawn behind the craft, a rear-view
 mirror, a 3D craft with hinged wings (`src/lib/game/craft.ts`, shared
-with the workshop's previews). Also built: the journal (past flights,
-on-device), export/import, offline, and home-screen install.
+with the workshop's previews). Also built: the journal, export/import,
+offline, and home-screen install.
+
+The journal is a **calendar**, not a list: one weekday grid per
+question, a month at a time, each day painted by where that day's
+first flight sat on that question's scale (`src/lib/progress/scale.ts`,
+`Calendar.svelte`). A day flown over is an outlined empty cell; a day
+not flown is a quiet date. Tapping a day opens it in place with its
+piece and delete.
 
 Gates give up **colours**, not materials — materials are gone
 entirely. Each cell holds one of thirty-two named colours, all solved
