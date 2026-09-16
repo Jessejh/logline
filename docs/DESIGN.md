@@ -32,11 +32,22 @@ horizon, no ground plane, no sky: it's space. Stars stream past. This
 removes the "flight sim" expectation and makes the movement feel
 contemplative rather than vehicular.
 
-The craft responds to thumb input through roll (banking on x-velocity),
-pitch (on y-velocity) and a little yaw, applied to a tiny 3D mesh: a
-diamond body, a fin, and two wings hinged at the root that flex with
-lift, roll rate and power. Seen from above and behind. A center spine
-line on the body sells the depth.
+The craft responds to thumb input through roll, pitch and a little yaw,
+applied to a small 3D mesh: a folded paper biplane — a dart of a body,
+two long wings braced apart by struts and wires, a fin and a
+tailplane. Every wing is hinged at the root and flexes with lift, roll
+rate and power; the upper one is braced, so it travels about
+seven tenths of what the lower one does and the pair shears as the
+craft rolls. Seen from above and behind. A centre crease down the body
+sells the depth.
+
+Roll and pitch do not lead off velocity alone. Each leans partly off
+the *steering error* — how far the thumb is from where the craft has
+got to — so the craft banks on the frame the thumb asks for a turn
+rather than a frame or two after the turn has started. The mass is all
+still there in how long the position takes to follow; what moved is
+when the aircraft acknowledges the input, which is most of what
+separates flying something from dragging it.
 
 The thumb is also the throttle. The craft flies forward only while
 the thumb is down; lift it and everything holds still, so there is
@@ -424,10 +435,11 @@ import (which carries the credit balance and bought skins too),
 offline use, and home-screen install.
 
 `prototypes/grading-phase.html` is the original self-contained
-HTML/JS build. It is kept frozen as the feel reference; the port
-carries its steering constants unchanged. Treat those constants as
-starting tuning, not final — but change them in `src/`, not in the
-prototype.
+HTML/JS build. It is kept frozen as the feel reference. The port no
+longer carries its steering constants — see "Two springs, on fixed
+steps" below — and that is the pattern to follow for any further
+tuning: change it in `src/`, say so in the divergence list, and leave
+the prototype alone.
 
 ### The first flight
 
@@ -464,6 +476,24 @@ deliberate change, not drift:
   it says "here", never "better"), the 1D label under it brightens,
   and 2D gates name the aimed cell. The projected line follows that
   simulated path and ends in a reticle on the gate.
+
+  The projected line is drawn as a beam rather than as a dotted
+  polyline: one continuous path in three passes — a wide soft sheath,
+  a thin bright core, and a train of short dashes travelling along it
+  toward the gate — composited with `lighter`, so where it crosses a
+  wall it lights the wall instead of drawing over it. Stroked segment
+  by segment, as it was, it beaded at every joint and its alpha
+  stepped instead of climbing.
+
+  The sight on the end of it tightens and turns as the gate closes,
+  and throws a ring the moment the aim changes cell, so crossing a
+  boundary is something felt rather than something you have to be
+  watching for. It is drawn *after* the craft, unlike the beam it sits
+  on. The two want opposite things: a beam has to leave from under the
+  hull or it reads as starting in the air ahead of it, while the
+  closer a gate gets the closer the aim point is to the craft's own
+  position — so a sight drawn underneath vanished behind the wings at
+  exactly the moment it mattered most.
 - **The trail is behind the craft.** The prototype's logged line
   converged to the same vanishing point as the gates, so it read as
   going ahead. It now sweeps down and off the bottom of the screen
@@ -471,12 +501,31 @@ deliberate change, not drift:
 - **A rear-view mirror.** Hangs from the top edge, mirrored
   left-to-right. Shows the whole trail converging to its vanishing
   point and the passed gates receding with their chosen cell lit.
-- **A winged craft.** A small 3D mesh replaces the flat diamond.
-  Wings are stiff hinges driven by lift, roll rate and throttle, with
-  a hard-edged flame at the tail while there is power on. The soft
-  plume it used to trail read as a smear of light under the craft
-  rather than as thrust, and at the size the craft is drawn now it
-  covered the gate behind it.
+- **A paper biplane.** A small 3D mesh replaces the flat diamond: two
+  long folded wings braced apart by cabane and interplane struts, on a
+  creased dart of a body, with a fin and a tailplane. Wings are sprung
+  hinges driven by lift, roll rate and throttle, with a hard-edged
+  twin flame at the tail while there is power on. The soft plume it
+  used to trail read as a smear of light under the craft rather than
+  as thrust, and at the size the craft is drawn now it covered the
+  gate behind it.
+
+  The second wing earns its place by being the part that *shears*. One
+  wing gave the craft a single silhouette that said very little about
+  which way it was banking until the bank was already large; a stacked
+  pair slides across itself at the smallest roll, so the smallest
+  input has something visible to answer it. The struts are what does
+  the sliding, and they cost four lines a side.
+
+  Span went from 42 model units to 60 and `CRAFT_SCALE` came down from
+  3.4 to 2.6 to pay for it, which lands the craft within a few per
+  cent of its old width on screen — a little under two cells at a
+  full-size gate, as before. The wings are longer *in proportion*,
+  which was the change; growing the silhouette was never it, and a
+  craft drawn wider than the gate it is flying at looks like a mistake
+  however good the hull is. `craft.ts` exports `CRAFT_SPAN` and
+  `CRAFT_LENGTH` so the workshop's thumbnails fit the mesh from its own
+  extents rather than from a number typed twice.
 - **Gates are walls, not openings.** Filaments of light strung across
   the whole frame, so passing a gate is going *through* something.
   The wall is identical in every cell — it is the one part of a gate
@@ -516,6 +565,58 @@ deliberate change, not drift:
   exists in the prototype, where the craft was fenced inside the grid
   and the player was left to work the controls out. See "A gate can
   be flown over" and "The first flight" above.
+- **Two springs, on fixed steps.** The prototype steered on one spring
+  — `k` 30, damping 7.2 — integrated at whatever the frame rate
+  happened to be, and both halves of that have been replaced.
+
+  One spring meant a craft that answered a sideways push exactly as it
+  answered a downward one, which reads as a cursor: there is no mass
+  in it anywhere. Roll is now the quick axis, stiffer and a little
+  loose so a flick is answered at once and the craft rocks once as it
+  settles; pitch is the heavy one, softer and nearly critically
+  damped, so it arrives without a bounce. The numbers are close
+  together and the difference between them is most of the feel.
+
+  Control authority also falls with the throttle, because air over a
+  wing is what a control surface has to push against. It only falls to
+  0.74: hovering is where the question is read and the cell is chosen,
+  and a mushy hover would tax exactly the care that screen is for.
+
+  The fixed step is the larger fix. A spring integrated at the frame
+  rate is a different spring on every device — the prototype's craft
+  settles faster on a 120Hz phone than on a 60Hz one, and a dropped
+  frame lurches it. The physics now runs in steps of 1/180s however
+  long the frame was, and 30fps and 60fps produce the same flight to
+  six decimal places where they used to differ by two per cent of the
+  frame. Everything that integrates is inside that loop, distance
+  flown included, so a frame in which the throttle was still opening
+  advances by what was actually flown.
+
+  It buys one more thing. `updateAim` calls the same `steerStep` at
+  the same step length rather than approximating it at 1/60, so the
+  lit cell is a statement about the model instead of a second opinion
+  on it. Two integrators could disagree near a cell boundary, and that
+  is the one disagreement this screen cannot afford: the reticle is
+  the promise the answer is taken against.
+
+- **The air is drawn.** With no horizon and no ground there was
+  nothing in the sky that could say how fast this was going except the
+  stars, and drawn as dots they said nothing — the field simply sat
+  there while the craft flew through it. Two cues, both free of
+  meaning and both off the throttle only:
+
+  A star is now the short line between where it is and where it was a
+  moment ago, so opening the throttle stretches the whole sky and
+  closing it lets the sky settle back to points. And each wingtip
+  sheds a vortex — thin, short, thrown to the outside of a turn,
+  spent within a second. Four tips, so the stack reads as a stack at
+  speed as well as at rest.
+
+  Both are kept deliberately thin. The exhaust plume beside them was
+  already cut back once for smearing light across the gate behind it,
+  and a fat wake would undo that. Neither is drawn at all under
+  `prefers-reduced-motion`.
+
 - **Steering is relative, not absolute.** The prototype set the
   craft's target straight to the touch point, so putting a thumb down
   anywhere but on the craft threw it across the screen — press near
@@ -568,6 +669,19 @@ not optional polish.
 The logged line is stored normalised into the gate frame rather than
 in screen pixels, so a record draws the same on any phone and a
 rotation mid-flight can't warp the trail.
+
+## Moving to another stack
+
+`docs/lovable-prompt.md` is a paste-ready brief for rebuilding the
+screens in Lovable (React + Vite + Tailwind), written because the
+question came up and because the answer is load-bearing either way:
+the flight engine moves unchanged and the screens get rewritten, which
+is exactly the split `docs/adr/0001-web-stack.md` bought by keeping
+`src/lib/game/` free of Svelte. Most of that document is the list of
+things such a tool will offer to add — Supabase, a score, a desktop
+layout, a charge for skipping — and why each one breaks the product
+rather than the style guide. It is worth reading before *any* stack
+move, not only that one.
 
 ## Open questions
 
