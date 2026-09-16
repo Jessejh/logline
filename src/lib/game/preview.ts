@@ -1,4 +1,4 @@
-import { CRAFT_REST, drawCraftBody } from './craft';
+import { CRAFT_LENGTH, CRAFT_REST, CRAFT_SPAN, drawCraftBody } from './craft';
 import { BASE_PALETTE, withAlpha, type Palette } from './palette';
 import { BASE_STYLE, type PieceStyle } from './pieceStyle';
 
@@ -207,8 +207,10 @@ function drawGatePreview(ctx: CanvasRenderingContext2D, w: number, h: number, pa
 function drawCraftPreview(ctx: CanvasRenderingContext2D, w: number, h: number, pal: Palette): void {
   ctx.save();
   ctx.translate(w / 2, h * 0.54);
-  // The mesh is ~40 units nose to tail; fit it across the thumbnail.
-  ctx.scale(Math.min(w / 46, h / 30), Math.min(w / 46, h / 30));
+  // Fitted from the mesh's own extents rather than from a number typed here,
+  // so lengthening a wing cannot quietly crop the hull out of its own price tag.
+  const fit = Math.min(w / (CRAFT_SPAN * 2.2), h / (CRAFT_LENGTH * 0.9));
+  ctx.scale(fit, fit);
   ctx.shadowColor = pal.craftGlow;
   ctx.shadowBlur = 9;
   drawCraftBody(ctx, { ...CRAFT_REST, roll: 0.22, pitch: -0.12 }, pal);

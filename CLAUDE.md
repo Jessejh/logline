@@ -52,16 +52,27 @@ where the world stops for four seconds, the view closes in, and an
 arrow is drawn over a gate.
 
 The grading phase runs as an installable web app in `src/`. It began
-as a faithful port of the prototype and the steering constants in
-`src/lib/game/flight.ts` are still the prototype's, unchanged. On top
-of that: hold-to-fly (the thumb is the throttle), the aimed cell lit
-on the next gate, gates as walls of light that are punched through
+as a faithful port of the prototype; the steering constants in
+`src/lib/game/flight.ts` are no longer the prototype's. The flight
+model is two springs — roll quick and a little loose, pitch heavy and
+nearly critically damped — run on fixed 1/180s steps whatever the
+frame rate is, with control authority falling a little as the throttle
+shuts. `steerStep` is the only copy of that model and `updateAim` runs
+it too, so the lit cell cannot disagree with where the craft actually
+goes. Changing any of it means adding to "Divergences from the
+prototype" in `docs/DESIGN.md`; the prototype itself stays frozen.
+
+On top of that: hold-to-fly (the thumb is the throttle), the aimed
+cell lit on the next gate, an aim beam ending in a sight that tightens
+as the gate closes, gates as walls of light that are punched through
 rather than passed, the trail drawn behind the craft, a rear-view
-mirror, a 3D craft with hinged wings (`src/lib/game/craft.ts`, shared
-with the workshop's previews), and a 3D artwork of the logged line
-after each flight (`src/lib/game/artwork.ts`). Also
-built: the journal (past flights, on-device), export/import, offline,
-and home-screen install.
+mirror, a paper biplane with braced hinged wings (`src/lib/game/craft.ts`,
+shared with the workshop's previews — fit thumbnails from its exported
+`CRAFT_SPAN`/`CRAFT_LENGTH`, never a hardcoded size), wingtip vortices
+and stars that streak with the throttle, and a 3D artwork of the logged
+line after each flight (`src/lib/game/artwork.ts`). Also built: the
+journal (past flights, on-device), export/import, offline, and
+home-screen install.
 
 After each flight the record becomes a piece: the line drawn flat on
 paper, the ground coloured by the colours the gates dealt, the ink

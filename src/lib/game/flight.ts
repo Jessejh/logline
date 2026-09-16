@@ -1,4 +1,4 @@
-import { craftTail, drawCraftBody } from './craft';
+import { craftTail, craftTips, drawCraftBody } from './craft';
 import { gateHues } from './hues';
 import { PALETTE, withAlpha } from './palette';
 import { QUESTIONS } from './questions';
@@ -8,11 +8,11 @@ import { visibleHeight, visibleWidth } from '../viewport';
 /**
  * The grading phase: one first-person flight through eight question-gates.
  *
- * Ported from `prototypes/grading-phase.html`. The steering constants below
- * are the prototype's, deliberately unchanged — they are the feel reference.
- * Where this file has since moved away from the prototype (hold-to-fly, the
- * trail drawn behind the craft, the mirror, the winged craft) is listed in
- * `docs/DESIGN.md` under "Divergences from the prototype".
+ * Ported from `prototypes/grading-phase.html`. The prototype's single steering
+ * spring has since been replaced — see `FLIGHT_MODEL` below and the entry in
+ * `docs/DESIGN.md` under "Divergences from the prototype", which is also where
+ * everything else this file has moved past (hold-to-fly, the trail drawn
+ * behind the craft, the mirror, the paper biplane) is listed.
  *
  * Nothing here scores the player: which cell you pass through decides what
  * the record says, never how well you did.
@@ -22,6 +22,69 @@ const FOCAL = 7;
 const SPEED = 3.45;
 const SPACING = 13.5;
 const FIRST_GATE = 17;
+
+/**
+ * The flight model. Two springs rather than the prototype's one, because a
+ * craft that answers a sideways push exactly as it answers a downward one
+ * reads as a cursor: there is no mass in it anywhere.
+ *
+ * Roll is the quick axis — stiffer and a little loose, so a flick of the thumb
+ * is answered immediately and the craft rocks once as it settles. Pitch is the
+ * heavy one — softer and nearly critically damped, so it arrives without a
+ * bounce. The difference is small in numbers and is most of what separates
+ * flying something from dragging it.
+ *
+ * `LIFT_AUTHORITY` is how much of that control is left with the throttle shut.
+ * Air over the wings is what a control surface has to push against, so a craft
+ * that has stopped should not be able to reposition as crisply as one at
+ * speed. It stays high: hovering is where a question is read and the cell is
+ * chosen, and a mushy hover would tax exactly the care the screen is for.
+ */
+const ROLL_K = 36;
+const ROLL_C = 9.2;
+const PITCH_K = 25;
+const PITCH_C = 9.4;
+const LIFT_AUTHORITY = 0.74;
+
+/**
+ * The physics runs in fixed steps of this length, however long the frame was.
+ *
+ * A spring integrated at the frame rate is a different spring on every device:
+ * the prototype's craft settles faster on a 120Hz phone than on a 60Hz one,
+ * and a dropped frame lurches it. Fixed steps make the feel one thing, and —
+ * because `updateAim` runs the same function at the same step — they also make
+ * the reticle's promise exact rather than approximate.
+ */
+const STEP = 1 / 180;
+
+/** The steering state the model integrates. The craft and the aim share it. */
+interface Steer {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+/**
+ * One step of the flight model, and the only place it exists. The aim
+ * simulation calls this too, so the lit cell can never be a cell the physics
+ * would not actually have reached.
+ */
+function steerStep(s: Steer, tx: number, ty: number, authority: number, dt: number): void {
+  s.vx += (tx - s.x) * ROLL_K * authority * dt;
+  s.vy += (ty - s.y) * PITCH_K * authority * dt;
+  // Exponential rather than a multiply-by-(1 - c·dt): damping stays damping at
+  // any step length instead of going unstable at a long one.
+  s.vx *= Math.exp(-ROLL_C * dt);
+  s.vy *= Math.exp(-PITCH_C * dt);
+  s.x += s.vx * dt;
+  s.y += s.vy * dt;
+}
+
+/** How much control the craft has at a given throttle setting. */
+function authorityAt(throttle: number): number {
+  return LIFT_AUTHORITY + (1 - LIFT_AUTHORITY) * throttle;
+}
 
 /**
  * Screen px of steering per px of thumb travel. Above 1 so a comfortable
@@ -39,13 +102,19 @@ const STEER_GAIN = 1.35;
  * prototype's size all of that is a few pixels of flicker. Big enough to enjoy
  * is the point of the number.
  *
- * The ceiling is the gate. Measured at 390px wide, 3.4 fills most of the grid
- * height as the gate arrives — the answer is read off the lit cell, the
- * reticle and the label row rather than the silhouette, and the body's centre
- * stays plainly inside one opening. Going much past this starts covering the
- * label row itself, which is where it would actually cost something.
+ * The ceiling is the gate. The answer is read off the lit cell, the reticle
+ * and the label row rather than the silhouette, and the body's centre stays
+ * plainly inside one opening — so a wide craft costs nothing right up until it
+ * starts covering the words.
+ *
+ * Dropped from 3.4 when the hull grew a second wing and a longer span. The
+ * mesh is 60 units across now rather than 42, so holding the old number would
+ * have widened the craft by half again — and a craft drawn wider than the gate
+ * it is flying at looks like a mistake however good the hull is. 2.6 lands
+ * within a hair of the old span on screen. The wings are longer *in
+ * proportion*, which is the change; growing the silhouette was never it.
  */
-const CRAFT_SCALE = 3.4;
+const CRAFT_SCALE = 2.6;
 
 /** How long a passed gate is kept around — the mirror watches it recede. */
 const KEEP_BEHIND = 48;
@@ -59,6 +128,26 @@ const CAM_UP = 150;
 const AIM_HORIZON = 2.0;
 /** Seconds a punched hole takes to open and fade. */
 const BURST_LIFE = 0.62;
+
+/**
+ * The air the craft is moving through, drawn as what it does to the wingtips.
+ *
+ * There is no horizon here and no ground, so the usual cues for speed are all
+ * missing — until now the only one was the stars, and at a walking throttle
+ * they read as a still field. A vortex rolling off each tip is the honest fix:
+ * it exists only while there is air being worked, it is thrown wider by a turn
+ * than by a straight run, and it says which way the craft is actually going
+ * rather than which way it is pointing.
+ *
+ * Kept thin and short on purpose. The exhaust plume this sits beside was
+ * already cut back once for smearing light across the gate behind it, and a
+ * fat wake would undo that.
+ */
+const WAKE_LIFE = 0.75;
+/** Vortices per second off each tip at full throttle. */
+const WAKE_RATE = 46;
+/** Seconds of streak a star is drawn with at full speed. */
+const STAR_STREAK = 0.052;
 /** Depth behind the camera at which a gate has finished sweeping past and is gone. */
 const GONE_AT = -3.4;
 
@@ -162,6 +251,23 @@ interface Burst {
   hue: string;
 }
 
+/**
+ * One puff of the vortex rolling off a wingtip. Screen space: it is born at
+ * the tip, is left behind within a second, and never has to survive a camera
+ * move worth correcting for.
+ */
+interface Wake {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  t: number;
+  /** How much air was being worked when it left the tip. */
+  power: number;
+  /** -1 for a tip on the left, 1 on the right. */
+  side: number;
+}
+
 interface Aim {
   gate: Gate | null;
   /** Screen position the craft will hold when it reaches the gate. */
@@ -250,6 +356,9 @@ export class Flight {
   private pops: Pop[] = [];
   private sparks: Spark[] = [];
   private bursts: Burst[] = [];
+  private wake: Wake[] = [];
+  /** Fractional vortices owed since the last one was shed. */
+  private wakeDue = 0;
   private answers: Answer[] = [];
   /** Gates met, answered or skipped. What ends the flight, and what it pays. */
   private met = 0;
@@ -268,6 +377,14 @@ export class Flight {
   private zoom = 1;
   private focus = { x: 0, y: 0 };
   private aim: Aim = { gate: null, x: 0, y: 0, inside: true, ix: 0, iy: 0, path: [] };
+  /**
+   * Seconds since the aim last moved to a different cell, so the reticle can
+   * snap when it changes hands. A sight that looks the same whether or not it
+   * just moved is a sight you have to read rather than notice.
+   */
+  private lockT = 9;
+  /** The cell the lock is currently on, to notice when it stops being that. */
+  private lockAt = '';
 
   /**
    * How the flight is going so far, 0 quiet to 1 loud, and the only thing the
@@ -465,6 +582,10 @@ export class Flight {
     this.pops = [];
     this.sparks = [];
     this.bursts = [];
+    this.wake = [];
+    this.wakeDue = 0;
+    this.lockT = 9;
+    this.lockAt = '';
     this.hoverTime = 0;
     this.flyTime = 0;
     this.rush = 0;
@@ -599,6 +720,7 @@ export class Flight {
   private update(dt: number): void {
     const p = this.plane;
     this.time += dt;
+    this.lockT += dt;
 
     // Forward motion is the thumb: down to fly, up to hover and think. Once
     // the last answer is in, the craft glides out on its own.
@@ -607,31 +729,51 @@ export class Flight {
     // still settles rather than stopping dead.
     const held = this.beat.running ? false : this.held;
     const want = held || (auto && !this.beat.running) ? 1 : 0;
-    const rate = this.beat.running ? 9 : want > p.throttle ? 4.5 : 3.4;
-    p.throttle += (want - p.throttle) * rate * dt;
-    if (Math.abs(want - p.throttle) < 0.004) p.throttle = want;
+
+    // Fixed steps, however long the frame was. Everything that integrates —
+    // the throttle, the steering, the attitude, the wing hinges and the
+    // distance flown — runs in here, so the craft behaves the same on a 60Hz
+    // phone, a 120Hz one and a frame that arrived late.
+    const steps = Math.min(16, Math.max(1, Math.ceil(dt / STEP)));
+    const h = dt / steps;
+    let advance = 0;
+    let rollWork = 0;
+    for (let i = 0; i < steps; i++) {
+      const rate = this.beat.running ? 9 : want > p.throttle ? 4.5 : 3.4;
+      p.throttle += (want - p.throttle) * rate * h;
+      if (Math.abs(want - p.throttle) < 0.004) p.throttle = want;
+
+      const ovy = p.vy;
+      steerStep(p, p.tx, p.ty, authorityAt(p.throttle), h);
+      const ay = (p.vy - ovy) / h;
+
+      // Attitude is read off velocity — bank on x, stretch on y — plus the
+      // steering error, which is the part that makes the craft feel connected.
+      // Velocity alone means the bank arrives after the turn does, a frame or
+      // two late every time; a real aircraft banks first and goes second. The
+      // error term is the thumb's intention, so the craft leans into a turn on
+      // the same frame the thumb asks for it, and the mass is all still there
+      // in how long the position takes to follow.
+      const leanX = p.vx * 0.0026 + (p.tx - p.x) * 0.0019;
+      const leanY = -(p.vy * 0.002 + (p.ty - p.y) * 0.0014);
+      const tRoll = Math.max(-0.7, Math.min(0.7, leanX));
+      const tPitch = Math.max(-0.45, Math.min(0.45, leanY));
+      // A little yaw out of the bank rather than straight off velocity: the
+      // nose comes round because the craft is banked, which is the order it
+      // happens in.
+      const tYaw = Math.max(-0.5, Math.min(0.5, p.roll * 0.42 + p.vx * 0.0005));
+      const prevRoll = p.roll;
+      p.roll += (tRoll - p.roll) * (1 - Math.exp(-8.5 * h));
+      p.pitch += (tPitch - p.pitch) * (1 - Math.exp(-6.5 * h));
+      p.yaw += (tYaw - p.yaw) * (1 - Math.exp(-5.5 * h));
+      const rollRate = (p.roll - prevRoll) / h;
+      rollWork += Math.abs(rollRate) * h;
+      this.wings(h, ay, rollRate);
+
+      advance += SPEED * p.throttle * h;
+    }
     const speed = SPEED * p.throttle;
-
-    const ovy = p.vy;
-    p.vx += (p.tx - p.x) * 30 * dt;
-    p.vy += (p.ty - p.y) * 30 * dt;
-    const damp = Math.exp(-7.2 * dt);
-    p.vx *= damp;
-    p.vy *= damp;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    const ay = (p.vy - ovy) / dt;
-
-    // Orientation is read off velocity: bank on x, stretch on y. That is the
-    // whole 3D read — there is no horizon to anchor it against.
-    const tRoll = Math.max(-0.65, Math.min(0.65, p.vx * 0.0028));
-    const tPitch = Math.max(-0.45, Math.min(0.45, -p.vy * 0.0022));
-    const tYaw = Math.max(-0.5, Math.min(0.5, p.vx * 0.0016));
-    const prevRoll = p.roll;
-    p.roll += (tRoll - p.roll) * 6 * dt;
-    p.pitch += (tPitch - p.pitch) * 6 * dt;
-    p.yaw += (tYaw - p.yaw) * 5 * dt;
-    this.wings(dt, ay, (p.roll - prevRoll) / dt);
+    this.shedWake(dt, dt > 0 ? rollWork / dt : 0);
 
     const target = this.camTarget();
     const follow = 1 - Math.exp(-CAM_LAG * dt);
@@ -651,7 +793,10 @@ export class Flight {
       this.hoverTime += dt;
     }
 
-    this.zDist += speed * dt;
+    // Summed inside the step loop rather than taken off the frame-end throttle,
+    // so a frame in which the throttle was still opening advances by what was
+    // actually flown.
+    this.zDist += advance;
 
     // The record only grows while the craft moves; hovering leaves no mark.
     if (this.zDist - this.lastLoggedZ > 0.004) {
@@ -696,6 +841,17 @@ export class Flight {
 
     for (const b of this.bursts) b.t += dt;
     this.bursts = this.bursts.filter((b) => b.t < BURST_LIFE);
+
+    for (const w of this.wake) {
+      w.t += dt;
+      w.x += w.vx * dt;
+      w.y += w.vy * dt;
+      // The vortex spends itself against the air it was left in.
+      const drag = Math.exp(-3.1 * dt);
+      w.vx *= drag;
+      w.vy *= drag;
+    }
+    this.wake = this.wake.filter((w) => w.t < WAKE_LIFE);
 
     this.updateAim();
     this.teachTick(dt);
@@ -853,11 +1009,14 @@ export class Flight {
    */
   private wings(dt: number, ay: number, rollRate: number): void {
     const p = this.plane;
-    const load = Math.max(-0.3, Math.min(0.5, -ay * 0.00035));
+    const load = Math.max(-0.28, Math.min(0.36, -ay * 0.00035));
     const rest = 0.08 + p.throttle * 0.14 + (1 - p.throttle) * Math.sin(this.time * 2.2) * 0.04;
     const asym = Math.max(-0.3, Math.min(0.3, rollRate * 0.22));
-    const k = 90;
-    const c = 9;
+    // Softened with the longer span. A long wing is a slower spring — same
+    // damping ratio, lower frequency — so the flex reads as a wing bending
+    // rather than as a hinge snapping.
+    const k = 76;
+    const c = 8.3;
     const tl = rest + load - asym;
     const tr = rest + load + asym;
     p.wingLv += ((tl - p.wingL) * k - p.wingLv * c) * dt;
@@ -867,9 +1026,62 @@ export class Flight {
   }
 
   /**
+   * The vortices rolling off the wingtips. Shed at a rate set by the throttle,
+   * thrown outward by how hard the craft is being rolled, and left behind in
+   * screen space to drift and die.
+   *
+   * Both wings shed, and the upper pair is drawn first, so the stack reads as
+   * a stack at speed as well as at rest.
+   */
+  private shedWake(dt: number, rollRate: number): void {
+    const p = this.plane;
+    if (this.reduced || this.beat.running) return;
+    const power = p.throttle;
+    if (power < 0.06) {
+      this.wakeDue = 0;
+      return;
+    }
+    this.wakeDue += WAKE_RATE * power * dt;
+    const shed = Math.floor(this.wakeDue);
+    if (shed <= 0) return;
+    this.wakeDue -= shed;
+    if (this.wake.length > 220) return;
+
+    const pose = { roll: p.roll, pitch: p.pitch, yaw: p.yaw, wingL: p.wingL, wingR: p.wingR };
+    const tips = craftTips(pose);
+    // A turn throws the wake to the outside of it, the same way the record's
+    // own paint is thrown. The craft is the arm and the air is what is spilled.
+    const curl = Math.max(-1, Math.min(1, rollRate * 0.5));
+    for (let i = 0; i < shed; i++) {
+      for (let j = 0; j < tips.length; j++) {
+        const tip = tips[j];
+        const side = j % 2 === 0 ? -1 : 1;
+        const upper = j < 2;
+        this.wake.push({
+          x: p.x + tip[0] * CRAFT_SCALE,
+          y: p.y + tip[1] * CRAFT_SCALE,
+          // Trailing the craft, spilling outward, and settling as the camera
+          // rides over it.
+          vx: -p.vx * 0.14 + side * (18 + 46 * Math.abs(curl)) * (curl * side > 0 ? 1.4 : 0.5),
+          vy: -p.vy * 0.1 + 26 + Math.random() * 22,
+          t: 0,
+          power: power * (upper ? 1 : 0.78) * (0.7 + Math.random() * 0.3),
+          side
+        });
+      }
+    }
+  }
+
+  /**
    * Where the craft will be when the next gate arrives, found by running the
    * same steering forward with the thumb held still. This drives both the
    * projected line and the lit cell on the gate.
+   *
+   * It calls `steerStep` at `STEP`, exactly as the flight does, so the reticle
+   * is a statement about the model rather than an approximation of it. When
+   * the two were separate integrators the lit cell and the cell recorded could
+   * disagree near a boundary, which is the one disagreement this screen cannot
+   * afford: the reticle is the promise the answer is taken against.
    */
   private updateAim(): void {
     const p = this.plane;
@@ -880,26 +1092,30 @@ export class Flight {
     // stretch of steering can still change.
     const horizon = gate ? Math.max(0.05, (gate.dist - pass) / SPEED) : 1.2;
     const simT = Math.min(horizon, AIM_HORIZON);
-    const step = 1 / 60;
-    let x = p.x;
-    let y = p.y;
-    let vx = p.vx;
-    let vy = p.vy;
-    const path: Aim['path'] = [{ x, y, d: 0 }];
-    for (let t = 0; t < simT; t += step) {
-      vx += (p.tx - x) * 30 * step;
-      vy += (p.ty - y) * 30 * step;
-      const damp = Math.exp(-7.2 * step);
-      vx *= damp;
-      vy *= damp;
-      x += vx * step;
-      y += vy * step;
-      path.push({ x, y, d: (t + step) * SPEED });
+    const sim: Steer = { x: p.x, y: p.y, vx: p.vx, vy: p.vy };
+    // Simulated at flying authority whatever the throttle is doing now,
+    // because reaching the gate at all means opening it: a prediction made at
+    // hovering authority would describe a flight that never happens.
+    const authority = authorityAt(1);
+    const path: Aim['path'] = [{ x: sim.x, y: sim.y, d: 0 }];
+    let n = 0;
+    for (let t = 0; t < simT; t += STEP) {
+      steerStep(sim, p.tx, p.ty, authority, STEP);
+      // Every fourth step is plotted. The path is a drawn line, and 180 points
+      // a second is four times the points for a curve no eye can tell apart.
+      if (++n % 4 === 0) path.push({ x: sim.x, y: sim.y, d: (t + STEP) * SPEED });
     }
-    if (horizon > simT) path.push({ x, y, d: horizon * SPEED });
+    path.push({ x: sim.x, y: sim.y, d: Math.max(simT, horizon) * SPEED });
 
-    const cell = gate ? this.cellAt(gate, x, y) : { ix: 0, iy: 0 };
-    this.aim = { gate, x, y, inside: this.insideGate(x, y), ix: cell.ix, iy: cell.iy, path };
+    const cell = gate ? this.cellAt(gate, sim.x, sim.y) : { ix: 0, iy: 0 };
+    const inside = this.insideGate(sim.x, sim.y);
+    this.aim = { gate, x: sim.x, y: sim.y, inside, ix: cell.ix, iy: cell.iy, path };
+
+    const at = gate && inside ? `${gate.n}:${cell.ix}:${cell.iy}` : '';
+    if (at !== this.lockAt) {
+      this.lockAt = at;
+      this.lockT = 0;
+    }
   }
 
   /**
@@ -1045,16 +1261,37 @@ export class Flight {
       ctx.translate(-this.focus.x, -this.focus.y);
     }
 
+    // Stars streak with the throttle. With no horizon and no ground they are
+    // the only thing in the sky that can say how fast this is, and drawn as
+    // dots they said nothing: the field simply sat there while the craft flew
+    // through it. A star is now the short line between where it is and where
+    // it was a moment ago, so opening the throttle stretches the whole sky and
+    // closing it lets the sky settle back into points.
+    const throttle = this.plane.throttle;
+    const behind = SPEED * throttle * STAR_STREAK * 1.2;
+    ctx.strokeStyle = PALETTE.star;
+    ctx.lineCap = 'round';
     for (const s of this.stars) {
       const k = this.proj(s.d);
       if (k <= 0) continue;
       const { x, y } = this.view(CX + s.wx, CY + s.wy, k);
       if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
       ctx.globalAlpha = Math.min(0.7, k * 1.1) * s.s;
-      ctx.fillStyle = PALETTE.star;
-      ctx.beginPath();
-      ctx.arc(x, y, Math.max(0.4, k * 1.8) * s.s, 0, Math.PI * 2);
-      ctx.fill();
+      const kb = this.proj(s.d + behind);
+      const back = this.view(CX + s.wx, CY + s.wy, kb);
+      const len = Math.hypot(x - back.x, y - back.y);
+      if (len > 1.2) {
+        ctx.lineWidth = Math.max(0.5, k * 1.6) * s.s;
+        ctx.beginPath();
+        ctx.moveTo(back.x, back.y);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = PALETTE.star;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(0.4, k * 1.8) * s.s, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
 
@@ -1075,7 +1312,9 @@ export class Flight {
     }
     ctx.globalAlpha = 1;
 
+    this.drawWake();
     this.drawCraft();
+    this.drawAimSight();
 
     // After the craft: it is an instruction, and the thing it is pointing over
     // is exactly where the craft is sitting.
@@ -1153,81 +1392,195 @@ export class Flight {
   }
 
   /**
-   * Intention: the path the craft will actually fly if the thumb stays put,
-   * ending in a reticle on the gate it is about to pass through.
+   * Intention: the path the craft will actually fly if the thumb stays put.
+   * The sight on the end of it is `drawAimSight`, which runs later.
    */
   private drawProjectedLine(): void {
     const { ctx } = this;
-    const { path, gate } = this.aim;
+    const { path } = this.aim;
     if (path.length < 2) return;
 
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = PALETTE.lamp;
-    let prev = path[0];
-    let ps = 1;
-    for (let i = 1; i < path.length; i++) {
-      const pt = path[i];
+    // The whole path in screen space first, so the beam can be stroked as one
+    // continuous line. Stroked segment by segment it beaded at every joint and
+    // the alpha stepped instead of climbing.
+    const pts: { x: number; y: number; s: number }[] = [];
+    for (const pt of path) {
       const s = this.proj(pt.d);
-      const { x: x0, y: y0 } = this.view(prev.x, prev.y, ps);
-      const { x: x1, y: y1 } = this.view(pt.x, pt.y, s);
-      ctx.globalAlpha = 0.12 + 0.3 * s;
-      ctx.lineWidth = Math.max(0.5, 2.2 * s);
-      ctx.setLineDash([4 * s + 1, 6 * s + 2]);
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-      prev = pt;
-      ps = s;
+      if (s <= 0.02) continue;
+      const v = this.view(pt.x, pt.y, s);
+      pts.push({ x: v.x, y: v.y, s });
     }
-    ctx.setLineDash([]);
+    if (pts.length < 2) return;
 
-    if (gate) {
-      // A reticle on the gate plane, at the spot the craft will pass through.
-      const s = this.proj(Math.max(0, gate.dist));
-      const { x, y } = this.view(this.aim.x, this.aim.y, s);
-      const r = 4 + 10 * s;
-      const pulse = 0.75 + 0.25 * Math.sin(this.time * 5);
+    const live = this.aim.inside;
+    const beam = live ? PALETTE.trailHot : PALETTE.label;
+    const trace = () => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    };
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // Three passes make a beam rather than a dotted line: a wide soft sheath,
+    // a thin bright core, and a train of dashes running along it toward the
+    // gate. Added rather than painted, so where the beam crosses the wall it
+    // lights it instead of drawing over it.
+    ctx.globalCompositeOperation = 'lighter';
+
+    ctx.strokeStyle = withAlpha(beam, live ? 0.1 : 0.06);
+    ctx.lineWidth = 7;
+    trace();
+    ctx.stroke();
+
+    ctx.strokeStyle = withAlpha(beam, live ? 0.34 : 0.2);
+    ctx.lineWidth = 1.6;
+    trace();
+    ctx.stroke();
+
+    // The dashes travel: a static dashed line says "projected", a moving one
+    // says the craft is going that way now. Offset runs negative so the train
+    // reads as leaving the craft rather than arriving at it.
+    if (!this.reduced) {
+      ctx.strokeStyle = withAlpha(beam, live ? 0.55 : 0.28);
+      ctx.lineWidth = 2.6;
+      ctx.setLineDash([3, 15]);
+      ctx.lineDashOffset = -((this.time * 190) % 18);
+      trace();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The sight itself, on the gate plane, at the spot the craft will pass
+   * through.
+   *
+   * Drawn after the craft, unlike the beam it sits on the end of. The two
+   * belong together but they want opposite things: the beam has to leave from
+   * under the hull or it reads as coming out of the air in front of it, and
+   * the sight has to stay legible — and the closer a gate gets the closer the
+   * aim point is to the craft's own position, so a sight drawn underneath
+   * disappeared behind the wings at exactly the moment it mattered most.
+   */
+  private drawAimSight(): void {
+    const { ctx } = this;
+    const gate = this.aim.gate;
+    if (!gate) return;
+    const s = this.proj(Math.max(0, gate.dist));
+    const { x, y } = this.view(this.aim.x, this.aim.y, s);
+    // Tightens as the gate closes, so the sight is at its most precise exactly
+    // when the answer is about to be taken.
+    const near = Math.min(1, Math.max(0, (14 - gate.dist) / 11));
+    const snap = Math.max(0, 1 - this.lockT / 0.22);
+    const r = (8 + 18 * s) * (1.4 - 0.4 * near) * (1 + snap * 0.45);
+    const pulse = 0.78 + 0.22 * Math.sin(this.time * 5);
+
+    if (!this.aim.inside) {
+      // Off the grid the sight opens out into a ring: the same mark saying the
+      // gate is going past rather than being answered.
       ctx.globalAlpha = (0.35 + 0.5 * s) * pulse;
-      ctx.strokeStyle = this.aim.inside ? PALETTE.trailHot : PALETTE.label;
-      // Off the grid the corners open out into a ring: the same mark saying
-      // the gate is going past rather than being answered.
-      if (!this.aim.inside) {
-        ctx.lineWidth = Math.max(0.8, 1.4 * s);
-        ctx.setLineDash([4 * s + 1, 5 * s + 1]);
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // Named, because leaving a question open is a decision and should never
-        // arrive as a surprise on the summary screen.
-        if (s > 0.3) {
-          ctx.globalAlpha = Math.min(1, (s - 0.3) * 3) * 0.8;
-          ctx.fillStyle = PALETTE.label;
-          ctx.textAlign = 'center';
-          ctx.font = `500 ${Math.min(15, Math.max(10, 15 * s))}px ${this.fontFamily}`;
-          ctx.fillText('leaving this one open', x, y - r - 8);
-        }
-        ctx.globalAlpha = 1;
-        return;
+      ctx.strokeStyle = PALETTE.label;
+      ctx.lineWidth = Math.max(0.8, 1.4 * s);
+      ctx.setLineDash([4 * s + 1, 5 * s + 1]);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Named, because leaving a question open is a decision and should never
+      // arrive as a surprise on the summary screen.
+      if (s > 0.3) {
+        ctx.globalAlpha = Math.min(1, (s - 0.3) * 3) * 0.8;
+        ctx.fillStyle = PALETTE.label;
+        ctx.textAlign = 'center';
+        ctx.font = `500 ${Math.min(15, Math.max(10, 15 * s))}px ${this.fontFamily}`;
+        ctx.fillText('leaving this one open', x, y - r - 8);
       }
-      ctx.strokeStyle = PALETTE.trailHot;
+      ctx.globalAlpha = 1;
+      return;
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = PALETTE.trailHot;
+
+    // Four brackets, turned a few degrees as they close. A sight that only
+    // shrinks reads as a shrinking sight; one that also turns reads as
+    // something taking hold.
+    const spin = (1 - near) * 0.22 + snap * 0.5;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(spin);
+    ctx.globalAlpha = (0.45 + 0.45 * s) * pulse;
+    ctx.lineWidth = Math.max(1, 1.8 * s);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const [sx, sy] of [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1]
+    ]) {
+      ctx.moveTo(sx * r, sy * r * 0.45);
+      ctx.lineTo(sx * r, sy * r);
+      ctx.lineTo(sx * r * 0.45, sy * r);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // A spot in the middle of it, so the sight has a point as well as a frame.
+    ctx.globalAlpha = (0.3 + 0.5 * near) * pulse;
+    ctx.fillStyle = PALETTE.trailHot;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(0.8, 1.7 * s), 0, Math.PI * 2);
+    ctx.fill();
+
+    // The snap: a ring thrown off the sight the moment the aim changes hands,
+    // which is what makes crossing a cell boundary something you feel rather
+    // than something you have to be watching for.
+    if (snap > 0 && !this.reduced) {
+      ctx.globalAlpha = snap * 0.5;
       ctx.lineWidth = Math.max(0.8, 1.4 * s);
       ctx.beginPath();
-      ctx.moveTo(x - r, y - r * 0.5);
-      ctx.lineTo(x - r, y - r);
-      ctx.lineTo(x - r * 0.5, y - r);
-      ctx.moveTo(x + r * 0.5, y - r);
-      ctx.lineTo(x + r, y - r);
-      ctx.lineTo(x + r, y - r * 0.5);
-      ctx.moveTo(x + r, y + r * 0.5);
-      ctx.lineTo(x + r, y + r);
-      ctx.lineTo(x + r * 0.5, y + r);
-      ctx.moveTo(x - r * 0.5, y + r);
-      ctx.lineTo(x - r, y + r);
-      ctx.lineTo(x - r, y + r * 0.5);
+      ctx.arc(x, y, r * (1.3 + (1 - snap) * 1.1), 0, Math.PI * 2);
       ctx.stroke();
     }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The vortices off the wingtips: thin tapering streaks, thrown wide by a
+   * turn, gone within a second. Drawn before the craft so they leave from
+   * behind it.
+   */
+  private drawWake(): void {
+    if (!this.wake.length) return;
+    const { ctx } = this;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    for (const w of this.wake) {
+      const k = w.t / WAKE_LIFE;
+      // In on a curve and out on one: a vortex that appeared at full strength
+      // read as a spark rather than as air rolling up.
+      const fade = Math.min(1, k * 6) * (1 - k) * (1 - k);
+      const v = this.view(w.x, w.y, 1);
+      const len = 9 + 26 * w.power * (1 - k * 0.5);
+      const sp = Math.hypot(w.vx, w.vy) || 1;
+      ctx.globalAlpha = fade * 0.22 * w.power;
+      ctx.strokeStyle = PALETTE.trailHot;
+      ctx.lineWidth = Math.max(0.4, 1.1 * (1 - k * 0.6));
+      ctx.beginPath();
+      ctx.moveTo(v.x, v.y);
+      ctx.lineTo(v.x - (w.vx / sp) * len, v.y - (w.vy / sp) * len);
+      ctx.stroke();
+    }
+    ctx.restore();
     ctx.globalAlpha = 1;
   }
 
@@ -1254,13 +1607,17 @@ export class Flight {
     if (p.throttle > 0.03) {
       const tail = craftTail(pose);
       const flame = p.throttle * (0.8 + 0.2 * Math.sin(this.time * 37));
-      ctx.strokeStyle = withAlpha(PALETTE.lamp, 0.75 * flame);
-      ctx.lineWidth = 1.4;
       ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(tail[0], tail[1]);
-      ctx.lineTo(tail[0], tail[1] + 3 + 5 * flame);
-      ctx.stroke();
+      // Twin, one either side of the spine, because the hull now has a fin
+      // between them — a single stroke down the centre came out of the fin.
+      for (const off of [-1.6, 1.6]) {
+        ctx.strokeStyle = withAlpha(PALETTE.lamp, 0.7 * flame);
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(tail[0] + off, tail[1]);
+        ctx.lineTo(tail[0] + off * 1.5, tail[1] + 3 + 5 * flame);
+        ctx.stroke();
+      }
     }
 
     ctx.shadowColor = PALETTE.craftGlow;
